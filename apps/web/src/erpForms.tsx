@@ -12,7 +12,7 @@ import {
 import { PrintActions } from './print.js';
 import {
   lineAmount, fromMilli, toMilli, netWeight, formatMaund, ratePerMaundToRatePerKg,
-  formatPKR, rupeesToPaisa, paisaToRupees, BOOK_MAP, MONEY_ACCOUNTS,
+  formatPKR, rupeesToPaisa, paisaToRupees, BOOK_MAP, BOOKS, MONEY_ACCOUNTS,
   type DocumentSnapshot,
 } from '@zt/shared';
 
@@ -31,7 +31,7 @@ interface PayPart { account_id: string; amount_paisa: number }
 const emptyPay = (): PayPart => ({ account_id: 'acct-cash', amount_paisa: 0 });
 
 export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: string }) {
-  const { t, online, enqueue, toast, can, session } = useApp();
+  const { t, online, enqueue, toast, can, session, lang } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const quick = params.get('quick') === '1';
@@ -129,116 +129,141 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
   if (!can(kind === 'sale' ? 'sales.post' : 'purchases.post')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
 
   return <div>
-    <div className="between"><h1>{kind === 'sale' ? 'فروخت' : 'خرید'} — {bookDef?.ur ?? book}</h1>
-      <div className="row"><Chip tone={quick ? 'warning' : 'gray'}>{quick ? 'تیز اندراج' : 'تفصیلی فارم'}</Chip>
-        {!online && <Chip tone="warning">آف لائن — PROVISIONAL</Chip>}</div></div>
-    {quick && <div className="notice info small">تیز اندراج میں صرف نام، تعداد، رقم اور نقد/ادھار درج کریں۔
-      <Link to={`/erp/${book === 'FERT' ? 'fertilizer' : book === 'PEST' ? 'pesticide' : `goods/${book}`}/${kind}/new`}> تفصیلی فارم </Link></div>}
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{kind === 'sale' ? (lang === 'ur' ? 'فروخت' : 'Sale') : (lang === 'ur' ? 'خرید' : 'Purchase')} — {lang === 'ur' ? (bookDef?.ur ?? book) : (bookDef?.en || bookDef?.ur || book)}</h1>
+      </div>
+      <div className="row">
+        <Chip tone={quick ? 'warning' : 'gray'}>{quick ? (lang === 'ur' ? 'تیز اندراج' : 'Quick Entry') : (lang === 'ur' ? 'تفصیلی فارم' : 'Detailed Form')}</Chip>
+        {!online && <Chip tone="warning">{lang === 'ur' ? 'آف لائن — PROVISIONAL' : 'Offline — PROVISIONAL'}</Chip>}
+      </div>
+    </div>
+
+    {/* Book selector tabs: switch between books cleanly */}
+    <div className="tabs no-print" style={{ marginBlock: '8px 14px' }}>
+      {BOOKS.filter((b) => b.kind === 'goods').map((b) => (
+        <button
+          key={b.code}
+          type="button"
+          className={b.code === book ? 'active' : ''}
+          onClick={() => nav(`/erp/${b.code === 'FERT' ? 'fertilizer' : b.code === 'PEST' ? 'pesticide' : `goods/${b.code}`}/${kind}/new`)}
+        >
+          {lang === 'ur' ? b.ur : (b.en || b.ur)}
+        </button>
+      ))}
+    </div>
+
+    {quick && <div className="notice info small">{lang === 'ur' ? 'تیز اندراج میں صرف نام، تعداد، رقم اور نقد/ادھار درج کریں۔' : 'In quick entry, just enter name, qty, amount and cash/credit.'}
+      <Link to={`/erp/${book === 'FERT' ? 'fertilizer' : book === 'PEST' ? 'pesticide' : `goods/${book}`}/${kind}/new`}> {lang === 'ur' ? 'تفصیلی فارم' : 'Detailed Form'} </Link></div>}
 
     {!result ? <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
       <div className="card">
-        <h2>بنیادی معلومات</h2>
+        <h2>{lang === 'ur' ? 'بنیادی معلومات' : 'Basic Information'}</h2>
         <div className="grid g2">
-          <TextField label="تاریخ" value={date} onChange={(v) => { setDate(v); setDirty(true); }} type="date" required />
-          <SelectField label="سیزن" value={season} onChange={setSeason} options={[
-            { value: 'NONE', label: '—' }, { value: 'KHARIF', label: 'خریف (Apr–Sep)' }, { value: 'RABI', label: 'ربی (Oct–Mar)' }]} />
+          <TextField label={lang === 'ur' ? 'تاریخ' : 'Date'} value={date} onChange={(v) => { setDate(v); setDirty(true); }} type="date" required />
+          <SelectField label={lang === 'ur' ? 'سیزن' : 'Season'} value={season} onChange={setSeason} options={[
+            { value: 'NONE', label: '—' }, { value: 'KHARIF', label: lang === 'ur' ? 'خریف (Apr–Sep)' : 'Kharif (Apr–Sep)' }, { value: 'RABI', label: lang === 'ur' ? 'ربی (Oct–Mar)' : 'Rabi (Oct–Mar)' }]} />
         </div>
-        <Combobox label={kind === 'sale' ? 'خریدار' : 'سپلائر'} value={partyId} onChange={(v) => { setPartyId(v); setDirty(true); }}
-          options={partyOptions} onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder="نام تلاش کریں یا نیا لکھیں" required error={fieldErrors.party_name} />
-        {!partyId && partyName && <Chip tone="success">نیا فریق: {partyName}</Chip>}
+        <Combobox label={kind === 'sale' ? (lang === 'ur' ? 'خریدار / گاہک' : 'Customer') : (lang === 'ur' ? 'سپلائر' : 'Supplier')} value={partyId} onChange={(v) => { setPartyId(v); setDirty(true); }}
+          options={partyOptions} onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder={lang === 'ur' ? 'نام تلاش کریں یا نیا لکھیں' : 'Search or type name'} required error={fieldErrors.party_name} />
+        {!partyId && partyName && <Chip tone="success">{lang === 'ur' ? `نیا فریق: ${partyName}` : `New Party: ${partyName}`}</Chip>}
         <div className="grid g2">
-          <TextField label="موبائل" value={partyPhone} onChange={setPartyPhone} placeholder="03XX-XXXXXXX"
+          <TextField label={lang === 'ur' ? 'موبائل نمبر' : 'Mobile Number'} value={partyPhone} onChange={setPartyPhone} placeholder="03XX-XXXXXXX"
             error={fieldErrors.party_phone} required={kind === 'sale' && book === 'PEST'} />
-          <TextField label="پتہ / گاؤں" value={partyAddress} onChange={setPartyAddress}
+          <TextField label={lang === 'ur' ? 'پتہ / گاؤں' : 'Address / Village'} value={partyAddress} onChange={setPartyAddress}
             required={kind === 'sale' && book === 'PEST'} />
         </div>
-        {kind === 'purchase' && <TextField label="سپلائر انوائس نمبر" value={supplierInvoice} onChange={setSupplierInvoice} />}
-        {kind === 'sale' && book === 'FERT' && <TextField label="CNIC (اختیاری، انکرپٹڈ)" value={cnic} onChange={setCnic} />}
+        {kind === 'purchase' && <TextField label={lang === 'ur' ? 'سپلائر انوائس نمبر' : 'Supplier Invoice No'} value={supplierInvoice} onChange={setSupplierInvoice} />}
+        {kind === 'sale' && book === 'FERT' && <TextField label={lang === 'ur' ? 'CNIC (اختیاری، انکرپٹڈ)' : 'CNIC (Optional, Encrypted)'} value={cnic} onChange={setCnic} />}
       </div>
 
-      <div className="card"><h2>لائنیں</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'آئٹم لائنیں' : 'Item Lines'}</h2>
         {lines.map((l, i) => <div key={i} className="card" style={{ marginBlockEnd: 12, background: 'var(--bg)' }}>
-          <div className="between"><strong>لائن {i + 1}</strong>
-            {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))} aria-label="لائن ہٹائیں"><Mark kind="x" /></Button>}</div>
-          <Combobox label="مصنوعات" value={l.product_id} onChange={(v) => {
+          <div className="between"><strong>{lang === 'ur' ? `لائن ${i + 1}` : `Line ${i + 1}`}</strong>
+            {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))} aria-label={lang === 'ur' ? 'لائن ہٹائیں' : 'Remove line'}><Mark kind="x" /></Button>}</div>
+          <Combobox label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={l.product_id} onChange={(v) => {
             const p = productRows.find((x: any) => x.id === v);
             setLine(i, { product_id: v, rate_paisa: p ? (kind === 'sale' ? p.sale_rate_paisa : p.purchase_rate_paisa) : 0 });
-          }} options={productOptions} placeholder="اردو یا انگریزی نام / SKU" required />
+          }} options={productOptions} placeholder={lang === 'ur' ? 'اردو یا انگریزی نام / SKU' : 'Product name or SKU'} required />
           <div className="grid g2">
-            <QtyField label="تعداد" milli={l.qty_milli} onChange={(v) => setLine(i, { qty_milli: v })}
+            <QtyField label={lang === 'ur' ? 'تعداد' : 'Quantity'} milli={l.qty_milli} onChange={(v) => setLine(i, { qty_milli: v })}
               unit={productRows.find((p: any) => p.id === l.product_id)?.base_unit} required />
-            <MoneyField label="ریٹ (فی بنیادی یونٹ)" paisa={l.rate_paisa} onChange={(v) => setLine(i, { rate_paisa: v })} required />
+            <MoneyField label={lang === 'ur' ? 'ریٹ (فی بنیادی یونٹ)' : 'Rate (per Unit)'} paisa={l.rate_paisa} onChange={(v) => setLine(i, { rate_paisa: v })} required />
           </div>
-          {quick && <MoneyField label="رقم (کل)" paisa={0} onChange={(v) => {
+          {quick && <MoneyField label={lang === 'ur' ? 'رقم (کل)' : 'Amount (Total)'} paisa={0} onChange={(v) => {
             if (l.qty_milli > 0) setLine(i, { rate_paisa: Math.round(v * 1000 / l.qty_milli) });
-          }} helper="رقم درج کریں؛ ریٹ خود بخود نکلا جائے گا" />}
+          }} helper={lang === 'ur' ? 'رقم درج کریں؛ ریٹ خود بخود نکلا جائے گا' : 'Enter amount; rate is auto-calculated'} />}
           {!quick && <div className="grid g2">
-            <MoneyField label="رعایت" paisa={l.discount_paisa} onChange={(v) => setLine(i, { discount_paisa: v })} />
-            <div className="card" style={{ padding: 12 }}><div className="small">لائن کل</div>
+            <MoneyField label={lang === 'ur' ? 'رعایت' : 'Discount'} paisa={l.discount_paisa} onChange={(v) => setLine(i, { discount_paisa: v })} />
+            <div className="card" style={{ padding: 12 }}><div className="small">{lang === 'ur' ? 'لائن کل' : 'Line Total'}</div>
               <div className="num">{formatPKR(lineAmount(l.qty_milli, l.rate_paisa) - l.discount_paisa)}</div></div>
           </div>}
           {(book === 'PEST' || productRows.find((p: any) => p.id === l.product_id)?.track_expiry) && !quick &&
             <div className="grid g2">
-              <TextField label="بیچ نمبر" value={l.batch_no} onChange={(v) => setLine(i, { batch_no: v })} required={kind === 'purchase'} />
-              <TextField label="مینوفیکچرر" value={l.manufacturer} onChange={(v) => setLine(i, { manufacturer: v })} required={kind === 'purchase'} />
-              <TextField label="تاریخِ تیاری" value={l.mfg_date} onChange={(v) => setLine(i, { mfg_date: v })} type="date" required={kind === 'purchase'} />
-              <TextField label="ایکسپائری" value={l.expiry_date} onChange={(v) => setLine(i, { expiry_date: v })} type="date" required={kind === 'purchase'} />
+              <TextField label={lang === 'ur' ? 'بیچ نمبر' : 'Batch No'} value={l.batch_no} onChange={(v) => setLine(i, { batch_no: v })} required={kind === 'purchase'} />
+              <TextField label={lang === 'ur' ? 'مینوفیکچرر' : 'Manufacturer'} value={l.manufacturer} onChange={(v) => setLine(i, { manufacturer: v })} required={kind === 'purchase'} />
+              <TextField label={lang === 'ur' ? 'تاریخِ تیاری' : 'Mfg Date'} value={l.mfg_date} onChange={(v) => setLine(i, { mfg_date: v })} type="date" required={kind === 'purchase'} />
+              <TextField label={lang === 'ur' ? 'ایکسپائری' : 'Expiry Date'} value={l.expiry_date} onChange={(v) => setLine(i, { expiry_date: v })} type="date" required={kind === 'purchase'} />
             </div>}
           {!quick && book === 'FERT' && <div className="grid g2">
-            <TextField label="بوریوں کی تعداد" value={String(l.bags || '')} onChange={(v) => setLine(i, { bags: Number(v) || 0 })} inputMode="numeric" />
-            <TextField label="وزن فی بوری (گرام)" value={String(l.weight_per_bag_grams || '')}
+            <TextField label={lang === 'ur' ? 'بوریوں کی تعداد' : 'Number of Bags'} value={String(l.bags || '')} onChange={(v) => setLine(i, { bags: Number(v) || 0 })} inputMode="numeric" />
+            <TextField label={lang === 'ur' ? 'وزن فی بوری (گرام)' : 'Weight per Bag (g)'} value={String(l.weight_per_bag_grams || '')}
               onChange={(v) => setLine(i, { weight_per_bag_grams: Number(v) || 0 })} inputMode="numeric" />
           </div>}
         </div>)}
-        <Button variant="secondary" size="sm" onClick={addLine}>+ لائن شامل کریں</Button>
+        <Button variant="secondary" size="sm" onClick={addLine}>{lang === 'ur' ? '+ لائن شامل کریں' : '+ Add Line'}</Button>
       </div>
 
-      {!quick && <div className="card"><h2>اضافی اخراجات</h2><div className="grid g2">
-        <MoneyField label="رعایت" paisa={discount} onChange={setDiscount} />
-        {kind === 'purchase' && <><MoneyField label="مال برداری" paisa={freight} onChange={setFreight} />
-          <MoneyField label="لوڈنگ / ان لوڈنگ" paisa={loadingC} onChange={setLoading} />
-          <MoneyField label="دیگر" paisa={other} onChange={setOther} /></>}
+      {!quick && <div className="card"><h2>{lang === 'ur' ? 'اضافی اخراجات' : 'Extra Expenses'}</h2><div className="grid g2">
+        <MoneyField label={lang === 'ur' ? 'رعایت' : 'Discount'} paisa={discount} onChange={setDiscount} />
+        {kind === 'purchase' && <><MoneyField label={lang === 'ur' ? 'مال برداری' : 'Freight'} paisa={freight} onChange={setFreight} />
+          <MoneyField label={lang === 'ur' ? 'لوڈنگ / ان لوڈنگ' : 'Loading / Labour'} paisa={loadingC} onChange={setLoading} />
+          <MoneyField label={lang === 'ur' ? 'دیگر' : 'Other Charges'} paisa={other} onChange={setOther} /></>}
       </div></div>}
 
-      <div className="card"><h2>ادائیگی</h2>
-        <CheckField label="ادھار (بقایا بعد میں وصول/ادا ہوگا)" checked={credit} onChange={setCredit} />
+      <div className="card"><h2>{lang === 'ur' ? 'ادائیگی' : 'Payment Details'}</h2>
+        <CheckField label={lang === 'ur' ? 'ادھار (بقایا بعد میں وصول/ادا ہوگا)' : 'Credit (Balance payable/receivable later)'} checked={credit} onChange={setCredit} />
         {!credit && payments.map((p, i) => <div key={i} className="grid g2" style={{ alignItems: 'end' }}>
-          <SelectField label="اکاؤنٹ" value={p.account_id} onChange={(v) => setPayments(payments.map((x, j) => j === i ? { ...x, account_id: v } : x))}
+          <SelectField label={lang === 'ur' ? 'اکاؤنٹ' : 'Account'} value={p.account_id} onChange={(v) => setPayments(payments.map((x, j) => j === i ? { ...x, account_id: v } : x))}
             options={accOptions} />
-          <MoneyField label="رقم" paisa={p.amount_paisa} onChange={(v) => setPayments(payments.map((x, j) => j === i ? { ...x, amount_paisa: v } : x))} />
+          <MoneyField label={lang === 'ur' ? 'رقم' : 'Amount'} paisa={p.amount_paisa} onChange={(v) => setPayments(payments.map((x, j) => j === i ? { ...x, amount_paisa: v } : x))} />
         </div>)}
-        {!credit && payments.length < 4 && <Button variant="ghost" size="sm" onClick={() => setPayments([...payments, emptyPay()])}>+ اکاؤنٹ شامل کریں (تقسیم)</Button>}
+        {!credit && payments.length < 4 && <Button variant="ghost" size="sm" onClick={() => setPayments([...payments, emptyPay()])}>{lang === 'ur' ? '+ اکاؤنٹ شامل کریں (تقسیم)' : '+ Split Account'}</Button>}
         <div className="kv" style={{ marginBlockStart: 16 }}>
-          <span className="k">ذیلی کل</span><span className="v num">{formatPKR(subtotal)}</span>
-          <span className="k">اضافی / رعایت</span><span className="v num">{formatPKR(extras)}</span>
-          <span className="k">کل</span><span className="v num">{formatPKR(total)}</span>
-          <span className="k">ادا شدہ</span><span className="v num">{formatPKR(paid)}</span>
-          <span className="k">بقایا (ادھار)</span><span className="v num" style={{ color: due > 0 ? 'var(--danger)' : undefined }}>{formatPKR(due)}</span>
+          <span className="k">{lang === 'ur' ? 'ذیلی کل' : 'Subtotal'}</span><span className="v num">{formatPKR(subtotal)}</span>
+          <span className="k">{lang === 'ur' ? 'اضافی / رعایت' : 'Extras / Discount'}</span><span className="v num">{formatPKR(extras)}</span>
+          <span className="k">{lang === 'ur' ? 'کل' : 'Grand Total'}</span><span className="v num">{formatPKR(total)}</span>
+          <span className="k">{lang === 'ur' ? 'ادا شدہ' : 'Paid'}</span><span className="v num">{formatPKR(paid)}</span>
+          <span className="k">{lang === 'ur' ? 'بقایا (ادھار)' : 'Balance Due'}</span><span className="v num" style={{ color: due > 0 ? 'var(--danger)' : undefined }}>{formatPKR(due)}</span>
         </div>
-        {balanceWarning > 0 && due > balanceWarning && <div className="notice"><Mark kind="warn" /> کریڈٹ حد سے تجاوز</div>}
+        {balanceWarning > 0 && due > balanceWarning && <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? 'کریڈٹ حد سے تجاوز' : 'Credit Limit Exceeded'}</div>}
       </div>
 
-      <div className="card"><TextField label="نوٹ" value={note} onChange={setNote} />
+      <div className="card"><TextField label={lang === 'ur' ? 'نوٹ' : 'Note'} value={note} onChange={setNote} />
         {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
         {Object.keys(fieldErrors).length > 0 && <pre>{JSON.stringify(fieldErrors, null, 2)}</pre>}
         <div className="btn-row">
-          <Button onClick={() => submit('post')} loading={busy}>محفوظ کریں اور پوسٹ کریں</Button>
-          <Button variant="secondary" onClick={() => submit('new')} loading={busy}>محفوظ کریں اور نیا</Button>
-          <Button variant="ghost" onClick={() => submit('draft')}>ڈرافٹ محفوظ کریں</Button>
-          <Button variant="ghost" onClick={() => { if (!dirty || confirm('تبدیلیاں ضائع ہوں گی؟')) nav(-1); }}>منسوخ</Button>
+          <Button onClick={() => submit('post')} loading={busy}>{lang === 'ur' ? 'محفوظ کریں اور پوسٹ کریں' : 'Save & Post'}</Button>
+          <Button variant="secondary" onClick={() => submit('new')} loading={busy}>{lang === 'ur' ? 'محفوظ کریں اور نیا' : 'Save & New'}</Button>
+          <Button variant="ghost" onClick={() => submit('draft')}>{lang === 'ur' ? 'ڈرافٹ محفوظ کریں' : 'Save Draft'}</Button>
+          <Button variant="ghost" onClick={() => { if (!dirty || confirm(lang === 'ur' ? 'تبدیلیاں ضائع ہوں گی؟' : 'Discard changes?')) nav(-1); }}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
         </div>
       </div>
     </div> : <div className="card">
-      <h2><Mark kind="check-circle" /> {kind === 'sale' ? 'فروخت' : 'خرید'} پوسٹ ہو گئی</h2>
-      <p>نمبر: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>
-      <p>کل: <span className="num">{formatPKR(result.total_paisa ?? total)}</span> · بقایا: <span className="num">{formatPKR(result.due_paisa ?? due)}</span></p>
+      <h2><Mark kind="check-circle" /> {kind === 'sale' ? (lang === 'ur' ? 'فروخت پوسٹ ہو گئی' : 'Sale Posted') : (lang === 'ur' ? 'خرید پوسٹ ہو گئی' : 'Purchase Posted')}</h2>
+      <p>{lang === 'ur' ? 'نمبر' : 'Number'}: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>
+      <p>{lang === 'ur' ? 'کل' : 'Total'}: <span className="num">{formatPKR(result.total_paisa ?? total)}</span> · {lang === 'ur' ? 'بقایا' : 'Due'}: <span className="num">{formatPKR(result.due_paisa ?? due)}</span></p>
       {!!result.warnings?.length && <div className="notice">{result.warnings.join(' · ')}</div>}
       {snapshot && <PrintActions snapshot={snapshot} />}
-      {!snapshot && !result.provisional && <div className="small">دستاویز «دستاویزات سینٹر» سے بھی پرنٹ ہو سکتی ہے۔</div>}
+      {!snapshot && !result.provisional && <div className="small">{lang === 'ur' ? 'دستاویز «دستاویزات سینٹر» سے بھی پرنٹ ہو سکتی ہے۔' : 'Document can also be printed from Documents Centre.'}</div>}
       <div className="btn-row">
-        <Link className="btn btn-secondary" to="/erp/receipts/new">+ رقم وصول</Link>
-        <Button variant="ghost" onClick={() => { setResult(null); setSnapshot(null); }}>نیا اندراج</Button>
-        <Link className="btn btn-ghost" to="/erp/documents">دستاویزات</Link>
+        <Link className="btn btn-secondary" to="/erp/receipts/new">{lang === 'ur' ? '+ رقم وصول' : '+ Receive Money'}</Link>
+        <Button variant="ghost" onClick={() => { setResult(null); setSnapshot(null); }}>{lang === 'ur' ? 'نیا اندراج' : 'New Entry'}</Button>
+        <Link className="btn btn-ghost" to="/erp/documents">{lang === 'ur' ? 'دستاویزات' : 'Documents'}</Link>
       </div>
     </div>}
   </div>;
@@ -394,7 +419,7 @@ export function GrainForm({ kind }: { kind: 'purchase' | 'sale' }) {
 
 // ------------------------------- Generic vouchers ----------------------------
 export function SimpleForm({ config }: { config: any }) {
-  const { t, online, enqueue, toast, can } = useApp();
+  const { t, online, enqueue, toast, can, lang } = useApp();
   const nav = useNavigate();
   const [values, setValues] = useState<Record<string, any>>(() => {
     const init: Record<string, any> = { date: TODAY(), allocate: 'AUTO', payee_type: 'SUPPLIER',
@@ -413,7 +438,7 @@ export function SimpleForm({ config }: { config: any }) {
   const submit = async () => {
     setErr(''); setBusy(true);
     for (const f of config.fields) if (f.required && !values[f.name] && values[f.name] !== false) {
-      setErr(`${f.label} درکار ہے`); setBusy(false); return;
+      setErr(lang === 'ur' ? `${f.label} درکار ہے` : `${f.label_en || f.label} is required`); setBusy(false); return;
     }
     try {
       if (!online && offlineType) {
@@ -421,7 +446,7 @@ export function SimpleForm({ config }: { config: any }) {
         setResult({ number: `D${op.device_id}-${op.id.slice(0, 6)}`, provisional: true });
       } else {
         const r = await api<any>(config.endpoint, { method: 'POST', body: values });
-        setResult(r); toast('محفوظ ہو گیا');
+        setResult(r); toast(lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved');
         if (r.number) {
           try {
             const docs = await api<any[]>(`/api/v1/documents?q=${encodeURIComponent(r.number)}&from=${values.date}&to=${values.date}`);
@@ -437,31 +462,44 @@ export function SimpleForm({ config }: { config: any }) {
     : config.endpoint.includes('payments') ? 'payments.post' : 'accounts.write';
   if (!can(perm)) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
 
-  return <div><h1>{config.title}</h1>
+  const title = lang === 'ur' ? config.title : (config.title_en || config.title);
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(config.back ?? -1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{title}</h1>
+      </div>
+    </div>
     {!result ? <div className="card" style={{ maxWidth: 720 }}>
       {config.fields.map((f: any) => {
         const v = values[f.name];
-        if (f.type === 'money') return <MoneyField key={f.name} label={f.label} paisa={v ?? 0} onChange={(x) => set(f.name, x)} required={f.required} helper={f.helper} />;
-        if (f.type === 'qty') return <QtyField key={f.name} label={f.label} milli={v ?? 0} onChange={(x) => set(f.name, x)} required={f.required} />;
-        if (f.type === 'date') return <TextField key={f.name} label={f.label} value={v ?? TODAY()} onChange={(x) => set(f.name, x)} type="date" required={f.required} />;
-        if (f.type === 'textarea') return <Field key={f.name} label={f.label}><textarea className="input" aria-label={f.label} value={v ?? ''} onChange={(e) => set(f.name, e.target.value)} /></Field>;
-        if (f.type === 'select') return <SelectField key={f.name} label={f.label} value={v ?? f.options[0].value} onChange={(x) => set(f.name, x)} options={f.options} required={f.required} />;
-        if (f.type === 'account') return <SelectField key={f.name} label={f.label} value={v ?? 'acct-cash'} onChange={(x) => set(f.name, x)} options={accOptions} required={f.required} />;
-        if (f.type === 'party') return <Combobox key={f.name} label={f.label} value={v ?? ''} onChange={(x) => set(f.name, x)}
+        const flabel = lang === 'ur' ? f.label : (f.label_en || f.label);
+        if (f.type === 'money') return <MoneyField key={f.name} label={flabel} paisa={v ?? 0} onChange={(x) => set(f.name, x)} required={f.required} helper={f.helper} />;
+        if (f.type === 'qty') return <QtyField key={f.name} label={flabel} milli={v ?? 0} onChange={(x) => set(f.name, x)} required={f.required} />;
+        if (f.type === 'date') return <TextField key={f.name} label={flabel} value={v ?? TODAY()} onChange={(x) => set(f.name, x)} type="date" required={f.required} />;
+        if (f.type === 'textarea') return <Field key={f.name} label={flabel}><textarea className="input" aria-label={flabel} value={v ?? ''} onChange={(e) => set(f.name, e.target.value)} /></Field>;
+        if (f.type === 'select') return <SelectField key={f.name} label={flabel} value={v ?? f.options[0].value} onChange={(x) => set(f.name, x)} options={f.options.map((o: any) => ({ value: o.value, label: lang === 'ur' ? o.label : (o.label_en || o.label) }))} required={f.required} />;
+        if (f.type === 'account') return <SelectField key={f.name} label={flabel} value={v ?? 'acct-cash'} onChange={(x) => set(f.name, x)} options={accOptions} required={f.required} />;
+        if (f.type === 'party') return <Combobox key={f.name} label={flabel} value={v ?? ''} onChange={(x) => set(f.name, x)}
           options={(parties.data ?? []).map((p: any) => ({ value: p.id, label: p.name_ur, sub: p.phone }))}
-          placeholder="فریق تلاش کریں" required={f.required} />;
-        if (f.type === 'expenseCategory') return <SelectField key={f.name} label={f.label} value={v ?? 'OTHER'} onChange={(x) => set(f.name, x)}
-          options={(categories.data ?? []).map((c: any) => ({ value: c.code, label: c.name_ur }))} required={f.required} />;
-        return <TextField key={f.name} label={f.label} value={v ?? ''} onChange={(x) => set(f.name, x)} required={f.required} helper={f.helper} />;
+          placeholder={lang === 'ur' ? 'فریق تلاش کریں' : 'Search party'} required={f.required} />;
+        if (f.type === 'expenseCategory') return <SelectField key={f.name} label={flabel} value={v ?? 'OTHER'} onChange={(x) => set(f.name, x)}
+          options={(categories.data ?? []).map((c: any) => ({ value: c.code, label: lang === 'ur' ? c.name_ur : (c.name_en || c.name_ur) }))} required={f.required} />;
+        return <TextField key={f.name} label={flabel} value={v ?? ''} onChange={(x) => set(f.name, x)} required={f.required} helper={f.helper} />;
       })}
-      {!online && offlineType && <Chip tone="warning">آف لائن — قطار میں محفوظ ہوگا</Chip>}
+      {!online && offlineType && <Chip tone="warning">{lang === 'ur' ? 'آف لائن — قطار میں محفوظ ہوگا' : 'Offline — Queued for Sync'}</Chip>}
       {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
-      <div className="btn-row"><Button onClick={submit} loading={busy}>محفوظ کریں</Button>
-        <Button variant="ghost" onClick={() => nav(config.back ?? -1)}>منسوخ</Button></div>
-    </div> : <div className="card"><h2><Mark kind="check-circle" /> محفوظ</h2>
-      {result.number && <p>نمبر: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>}
+      <div className="btn-row">
+        <Button onClick={submit} loading={busy}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
+        <Button variant="ghost" onClick={() => nav(config.back ?? -1)}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
+      </div>
+    </div> : <div className="card"><h2><Mark kind="check-circle" /> {lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved'}</h2>
+      {result.number && <p>{lang === 'ur' ? 'نمبر' : 'Number'}: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>}
       {snapshot && <PrintActions snapshot={snapshot} />}
-      <div className="btn-row"><Button variant="ghost" onClick={() => setResult(null)}>نیا</Button>
-        <Link className="btn btn-secondary" to={config.back ?? '/erp'}>واپس</Link></div></div>}
+      <div className="btn-row"><Button variant="ghost" onClick={() => setResult(null)}>{lang === 'ur' ? 'نیا' : 'New'}</Button>
+        <Link className="btn btn-secondary" to={config.back ?? '/erp'}>{lang === 'ur' ? 'واپس' : 'Back'}</Link></div></div>}
   </div>;
 }

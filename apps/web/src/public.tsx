@@ -1,6 +1,6 @@
 /** PUBLIC WEBSITE — PUB-01..09. All data comes from /api/v1/public/* (no internal fields). */
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useGet } from './api.js';
 import { useApp } from './app-state.js';
 import { BUSINESS_PROFILE } from '@zt/shared';
@@ -41,6 +41,8 @@ function Header({ business }: { business: any }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const loc = useLocation();
+  const navTo = useNavigate();
+  const isHome = loc.pathname === '/';
   const b = business ?? BUSINESS_PROFILE;
   const nav: [string, string][] = [
     ['/', t('home')], ['/products', t('products')], ['/categories', t('categories')],
@@ -55,14 +57,28 @@ function Header({ business }: { business: any }) {
   useEffect(() => { setOpen(false); }, [loc.pathname]);
 
   return <header className={`pub-header glass${scrolled ? ' pub-header-scrolled' : ''}`}>
-    <Link to="/" className="brand">
-      <span className="brand-mark"><img src={b.logo_url || '/brand/logo-96.webp'} alt="" width={44} height={44} /></span>
-      <span className="brand-text">
-        {/* One name, in the reading language — the other script stays as the subtle sub-line. */}
-        <strong>{bi(b.name_ur, b.name_en)}</strong>
-        <small>{lang === 'ur' ? (b.name_en ?? BUSINESS_PROFILE.name_en) : (b.name_ur ?? BUSINESS_PROFILE.name_ur)}</small>
-      </span>
-    </Link>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {!isHome && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm pub-back-btn"
+          onClick={() => navTo(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Go back'}
+          title={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}
+        >
+          <span className="back-arrow" aria-hidden="true">{lang === 'ur' ? '›' : '‹'}</span>
+          <span className="back-text">{lang === 'ur' ? 'واپس' : 'Back'}</span>
+        </button>
+      )}
+      <Link to="/" className="brand">
+        <span className="brand-mark"><img src={b.logo_url || '/brand/logo-96.webp'} alt="" width={44} height={44} /></span>
+        <span className="brand-text">
+          {/* One name, in the reading language — the other script stays as the subtle sub-line. */}
+          <strong>{bi(b.name_ur, b.name_en)}</strong>
+          <small>{lang === 'ur' ? (b.name_en ?? BUSINESS_PROFILE.name_en) : (b.name_ur ?? BUSINESS_PROFILE.name_ur)}</small>
+        </span>
+      </Link>
+    </div>
     <nav className="pub-nav" aria-label={t('mainNav')}>
       {nav.map(([to, label]) => <Link key={to} to={to}>{label}</Link>)}
     </nav>

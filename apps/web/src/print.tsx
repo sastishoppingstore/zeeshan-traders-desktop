@@ -19,7 +19,7 @@ const SIZES: { value: Size; labelKey: string; noteKey: string }[] = [
 ];
 
 export function PrintActions({ snapshot, onClose }: { snapshot: DocumentSnapshot; onClose?: () => void }) {
-  const { t, toast } = useApp();
+  const { t, toast, lang } = useApp();
   const [size, setSize] = useState<Size>('A4');
   useEffect(() => {
     if (!onClose) return;
@@ -38,6 +38,11 @@ export function PrintActions({ snapshot, onClose }: { snapshot: DocumentSnapshot
   return createPortal(<div className="print-root" role="dialog" aria-modal="true"
     aria-label={`${snapshot.title_ur} ${snapshot.number} — ${t('printPreview')}`}>
     <div className="print-bar no-print">
+      <button type="button" className="btn btn-secondary btn-sm pub-back-btn no-print"
+        onClick={() => (onClose ? onClose() : window.history.back())}
+        aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+        <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+      </button>
       <span className="print-bar-title">{snapshot.title_ur} <span className="num">{snapshot.number}</span></span>
       <span className="print-sizes" role="group" aria-label={t('printFormat')}>
         {SIZES.map((x) => <button key={x.value} type="button"

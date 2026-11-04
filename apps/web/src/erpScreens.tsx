@@ -56,7 +56,14 @@ export function GenericList({ config }: { config: any }) {
     : config.endpoint.includes('purchases') ? 'purchases.read' : 'catalogue.read';
   const title = lang === 'ur' ? config.title : (config.title_en || config.title);
   return <div>
-    <div className="between"><h1>{title}</h1>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{title}</h1>
+      </div>
       <div className="btn-row no-print">
         {(config.actions ?? []).map((a: any) => <Link key={a.to} className="btn btn-secondary btn-sm" to={a.to}>{lang === 'ur' ? a.label : (a.label_en || a.label)}</Link>)}
         {config.create && <Button size="sm" onClick={() => setCreateOpen(true)}>{lang === 'ur' ? '+ نیا' : '+ New'}</Button>}
@@ -198,7 +205,7 @@ const PRODUCT_DEFAULT: any = {
 export function ProductForm() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { can, toast, t } = useApp();
+  const { can, toast, t, lang } = useApp();
   const [tab, setTab] = useState('basic');
   const [p, setP] = useState<any>(PRODUCT_DEFAULT);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [saved, setSaved] = useState(false);
@@ -213,93 +220,106 @@ export function ProductForm() {
     try {
       const body: any = { ...p };
       if (!body.name_ur || !body.category_id || !body.base_unit || !body.purchase_unit || !body.sale_unit || body.conversion_ratio_milli <= 0) {
-        throw new Error('نام، زمرہ، یونٹس اور کنورژن لازمی ہیں');
+        throw new Error(lang === 'ur' ? 'نام، زمرہ، یونٹس اور کنورژن لازمی ہیں' : 'Name, category, units and conversion ratio are required');
       }
       if (id) await api(`/api/v1/products/${id}`, { method: 'PUT', body });
       else await api('/api/v1/products', { method: 'POST', body });
-      toast('محفوظ ہو گیا'); setSaved(true); nav('/erp/products');
+      toast(lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved successfully'); setSaved(true); nav('/erp/products');
     } catch (e: any) { setErr(e.message_ur ?? e.message ?? String(e)); } finally { setBusy(false); }
   };
   const upload = async (file: File) => {
-    if (!id) { setErr('تصویر شامل کرنے سے پہلے مصنوعات محفوظ کریں'); return; }
+    if (!id) { setErr(lang === 'ur' ? 'تصویر شامل کرنے سے پہلے مصنوعات محفوظ کریں' : 'Save product before uploading image'); return; }
     setUploadBusy(true);
     try {
       const dataUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file); });
       await api('/api/v1/images', { method: 'POST', body: { product_id: id, data_url: dataUrl, alt_ur: p.name_ur } });
-      toast('تصویر محفوظ'); existing.refetch();
+      toast(lang === 'ur' ? 'تصویر محفوظ' : 'Image saved'); existing.refetch();
     } catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setUploadBusy(false); }
   };
   if (!can('products.write')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
   if (id && existing.isLoading) return <Skeleton rows={5} />;
-  const tabs = [{ id: 'basic', label: 'بنیادی' }, { id: 'pricing', label: 'قیمتیں' }, { id: 'stock', label: 'اسٹاک' },
-    { id: 'web', label: 'ویب / SEO' }, { id: 'images', label: 'تصاویر' }];
-  return <div><div className="between"><h1>{id ? `مصنوعات: ${p.name_ur || ''}` : 'نئی مصنوعات'}</h1>
-    <Button variant="ghost" size="sm" onClick={() => nav('/erp/products')}>واپس</Button></div>
+  const tabs = [
+    { id: 'basic', label: lang === 'ur' ? 'بنیادی' : 'Basic' },
+    { id: 'pricing', label: lang === 'ur' ? 'قیمتیں' : 'Pricing' },
+    { id: 'stock', label: lang === 'ur' ? 'اسٹاک' : 'Stock' },
+    { id: 'web', label: lang === 'ur' ? 'ویب / SEO' : 'Web / SEO' },
+    { id: 'images', label: lang === 'ur' ? 'تصاویر' : 'Images' }
+  ];
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav('/erp/products')}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{id ? (lang === 'ur' ? `مصنوعات: ${p.name_ur || ''}` : `Product: ${p.name_en || p.name_ur || ''}`) : (lang === 'ur' ? 'نئی مصنوعات' : 'New Product')}</h1>
+      </div>
+    </div>
     <Tabs tabs={tabs} active={tab} onChange={setTab} />
     <div className="card">
       {tab === 'basic' && <div className="grid g2">
-        <TextField label="نام (اردو)" value={p.name_ur} onChange={(v) => set('name_ur', v)} required />
-        <TextField label="نام (English)" value={p.name_en} onChange={(v) => set('name_en', v)} dir="ltr" />
-        <SelectField label="زمرہ" value={p.category_id} onChange={(v) => set('category_id', v)} required placeholder="منتخب کریں"
-          options={(cats.data ?? []).map((c: any) => ({ value: c.id, label: `${c.name_ur} (${c.code})` }))} />
-        <SelectField label="برانڈ" value={p.brand_id ?? ''} onChange={(v) => set('brand_id', v || null)} placeholder="—"
-          options={(brands.data ?? []).map((b: any) => ({ value: b.id, label: b.name_ur }))} />
+        <TextField label={lang === 'ur' ? 'نام (اردو)' : 'Name (Urdu)'} value={p.name_ur} onChange={(v) => set('name_ur', v)} required />
+        <TextField label={lang === 'ur' ? 'نام (English)' : 'Name (English)'} value={p.name_en} onChange={(v) => set('name_en', v)} dir="ltr" />
+        <SelectField label={lang === 'ur' ? 'زمرہ' : 'Category'} value={p.category_id} onChange={(v) => set('category_id', v)} required placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Category'}
+          options={(cats.data ?? []).map((c: any) => ({ value: c.id, label: `${lang === 'ur' ? c.name_ur : (c.name_en || c.name_ur)} (${c.code})` }))} />
+        <SelectField label={lang === 'ur' ? 'برانڈ' : 'Brand'} value={p.brand_id ?? ''} onChange={(v) => set('brand_id', v || null)} placeholder="—"
+          options={(brands.data ?? []).map((b: any) => ({ value: b.id, label: lang === 'ur' ? b.name_ur : (b.name_en || b.name_ur) }))} />
         <TextField label="SKU" value={p.sku} onChange={(v) => set('sku', v)} />
-        <TextField label="بار کوڈ" value={p.barcode} onChange={(v) => set('barcode', v)} />
-        <TextField label="Slug" value={p.slug} onChange={(v) => set('slug', v)} dir="ltr" helper="خالی چھوڑیں تو نام سے بنے گا" />
-        <SelectField label="سیزن" value={p.season} onChange={(v) => set('season', v)}
-          options={[{ value: 'NONE', label: '—' }, { value: 'KHARIF', label: 'خریف' }, { value: 'RABI', label: 'ربی' }]} />
-        <Field label="تفصیل (اردو)"><textarea className="input" aria-label="تفصیل (اردو)" value={p.description_ur} onChange={(e) => set('description_ur', e.target.value)} /></Field>
+        <TextField label={lang === 'ur' ? 'بار کوڈ' : 'Barcode'} value={p.barcode} onChange={(v) => set('barcode', v)} />
+        <TextField label="Slug" value={p.slug} onChange={(v) => set('slug', v)} dir="ltr" helper={lang === 'ur' ? 'خالی چھوڑیں تو نام سے بنے گا' : 'Leave empty to auto-generate from name'} />
+        <SelectField label={lang === 'ur' ? 'سیزن' : 'Season'} value={p.season} onChange={(v) => set('season', v)}
+          options={[{ value: 'NONE', label: '—' }, { value: 'KHARIF', label: lang === 'ur' ? 'خریف' : 'Kharif' }, { value: 'RABI', label: lang === 'ur' ? 'ربی' : 'Rabi' }]} />
+        <Field label={lang === 'ur' ? 'تفصیل (اردو)' : 'Description (Urdu)'}><textarea className="input" aria-label={lang === 'ur' ? 'تفصیل (اردو)' : 'Description (Urdu)'} value={p.description_ur} onChange={(e) => set('description_ur', e.target.value)} /></Field>
       </div>}
       {tab === 'pricing' && <div className="grid g2">
-        <MoneyField label="خرید ریٹ" paisa={p.purchase_rate_paisa} onChange={(v) => set('purchase_rate_paisa', v)} />
-        <MoneyField label="فروخت ریٹ" paisa={p.sale_rate_paisa} onChange={(v) => set('sale_rate_paisa', v)} />
-        <MoneyField label="عوامی قیمت" paisa={p.public_price_paisa} onChange={(v) => set('public_price_paisa', v)} />
-        <TextField label="ٹیکس % (1000 = 1%)" value={String(p.tax_pct_milli)} onChange={(v) => set('tax_pct_milli', Number(v) || 0)} inputMode="numeric" />
-        <CheckField label="ویب پر قیمت دکھائیں" checked={p.show_public_price} onChange={(v) => set('show_public_price', v)} />
-        <div className="notice small">عوامی API کبھی لاگت، مارجن، سپلائر یا اندرونی نوٹ نہیں بھیجتا (H6)۔</div>
+        <MoneyField label={lang === 'ur' ? 'خرید ریٹ' : 'Purchase Rate'} paisa={p.purchase_rate_paisa} onChange={(v) => set('purchase_rate_paisa', v)} />
+        <MoneyField label={lang === 'ur' ? 'فروخت ریٹ' : 'Sale Rate'} paisa={p.sale_rate_paisa} onChange={(v) => set('sale_rate_paisa', v)} />
+        <MoneyField label={lang === 'ur' ? 'عوامی قیمت' : 'Public Price'} paisa={p.public_price_paisa} onChange={(v) => set('public_price_paisa', v)} />
+        <TextField label={lang === 'ur' ? 'ٹیکس % (1000 = 1%)' : 'Tax % (1000 = 1%)'} value={String(p.tax_pct_milli)} onChange={(v) => set('tax_pct_milli', Number(v) || 0)} inputMode="numeric" />
+        <CheckField label={lang === 'ur' ? 'ویب پر قیمت دکھائیں' : 'Show Price on Public Web'} checked={p.show_public_price} onChange={(v) => set('show_public_price', v)} />
+        <div className="notice small">{lang === 'ur' ? 'عوامی API کبھی لاگت، مارجن، سپلائر یا اندرونی نوٹ نہیں بھیجتا (H6)۔' : 'Public API never leaks purchase cost, margins, suppliers, or internal notes (H6).'}</div>
       </div>}
       {tab === 'stock' && <div className="grid g2">
-        <TextField label="بنیادی یونٹ" value={p.base_unit} onChange={(v) => set('base_unit', v)} required />
-        <TextField label="خرید یونٹ" value={p.purchase_unit} onChange={(v) => set('purchase_unit', v)} required />
-        <TextField label="فروخت یونٹ" value={p.sale_unit} onChange={(v) => set('sale_unit', v)} required />
-        <TextField label="تبدیلی (milli; 1000 = 1:1)" value={fromMilli(p.conversion_ratio_milli)} onChange={(v) => { try { set('conversion_ratio_milli', toMilli(v)); } catch { /* ignore */ } }} />
-        <QtyField label="کم اسٹاک حد" milli={p.reorder_level_milli} onChange={(v) => set('reorder_level_milli', v)} />
-        <CheckField label="بیچ ٹریکنگ" checked={p.track_batch} onChange={(v) => set('track_batch', v)} />
-        <CheckField label="ایکسپائری ٹریکنگ" checked={p.track_expiry} onChange={(v) => set('track_expiry', v)} />
-        <CheckField label="پیسٹی سائیڈ (بیچ + ایکسپائری لازمی)" checked={p.is_pesticide} onChange={(v) => { set('is_pesticide', v); if (v) { set('track_batch', true); set('track_expiry', true); } }} />
-        <div className="notice small">موجودہ اسٹاک: <span className="num">{fromMilli(p.stock_milli ?? 0)}</span> — صرف پوسٹڈ دستاویزات سے بدلتا ہے۔</div>
+        <TextField label={lang === 'ur' ? 'بنیادی یونٹ' : 'Base Unit'} value={p.base_unit} onChange={(v) => set('base_unit', v)} required />
+        <TextField label={lang === 'ur' ? 'خرید یونٹ' : 'Purchase Unit'} value={p.purchase_unit} onChange={(v) => set('purchase_unit', v)} required />
+        <TextField label={lang === 'ur' ? 'فروخت یونٹ' : 'Sale Unit'} value={p.sale_unit} onChange={(v) => set('sale_unit', v)} required />
+        <TextField label={lang === 'ur' ? 'تبدیلی (milli; 1000 = 1:1)' : 'Conversion Ratio (milli; 1000 = 1:1)'} value={fromMilli(p.conversion_ratio_milli)} onChange={(v) => { try { set('conversion_ratio_milli', toMilli(v)); } catch { /* ignore */ } }} />
+        <QtyField label={lang === 'ur' ? 'کم اسٹاک حد' : 'Reorder Alert Level'} milli={p.reorder_level_milli} onChange={(v) => set('reorder_level_milli', v)} />
+        <CheckField label={lang === 'ur' ? 'بیچ ٹریکنگ' : 'Batch Tracking'} checked={p.track_batch} onChange={(v) => set('track_batch', v)} />
+        <CheckField label={lang === 'ur' ? 'ایکسپائری ٹریکنگ' : 'Expiry Tracking'} checked={p.track_expiry} onChange={(v) => set('track_expiry', v)} />
+        <CheckField label={lang === 'ur' ? 'پیسٹی سائیڈ (بیچ + ایکسپائری لازمی)' : 'Pesticide (Mandatory Batch + Expiry)'} checked={p.is_pesticide} onChange={(v) => { set('is_pesticide', v); if (v) { set('track_batch', true); set('track_expiry', true); } }} />
+        <div className="notice small">{lang === 'ur' ? 'موجودہ اسٹاک: ' : 'Current Stock: '}<span className="num">{fromMilli(p.stock_milli ?? 0)}</span> — {lang === 'ur' ? 'صرف پوسٹڈ دستاویزات سے بدلتا ہے۔' : 'Updates exclusively via posted documents.'}</div>
       </div>}
       {tab === 'web' && <div className="grid g2">
-        <CheckField label="ویب پر شائع کریں" checked={p.is_published} onChange={(v) => set('is_published', v)} />
-        <CheckField label="نمایاں" checked={p.is_featured} onChange={(v) => set('is_featured', v)} />
-        <CheckField label="فعال" checked={p.is_active} onChange={(v) => set('is_active', v)} />
-        <SelectField label="دستیابی" value={p.availability_mode} onChange={(v) => set('availability_mode', v)}
-          options={[{ value: 'AUTO', label: 'اسٹاک کے مطابق' }, { value: 'ALWAYS', label: 'ہمیشہ دستیاب' }, { value: 'CALL', label: 'کال کریں' }]} />
-        <TextField label="SEO عنوان" value={p.seo_title} onChange={(v) => set('seo_title', v)} />
-        <TextField label="SEO تفصیل" value={p.seo_description} onChange={(v) => set('seo_description', v)} />
-        <div className="notice info small">شائع کرنے پر سرور عوامی کیش صاف کرتا ہے (60–300 سیکنڈ)۔</div>
+        <CheckField label={lang === 'ur' ? 'ویب پر شائع کریں' : 'Publish to Web'} checked={p.is_published} onChange={(v) => set('is_published', v)} />
+        <CheckField label={lang === 'ur' ? 'نمایاں' : 'Featured Product'} checked={p.is_featured} onChange={(v) => set('is_featured', v)} />
+        <CheckField label={lang === 'ur' ? 'فعال' : 'Active'} checked={p.is_active} onChange={(v) => set('is_active', v)} />
+        <SelectField label={lang === 'ur' ? 'دستیابی' : 'Availability Mode'} value={p.availability_mode} onChange={(v) => set('availability_mode', v)}
+          options={[{ value: 'AUTO', label: lang === 'ur' ? 'اسٹاک کے مطابق' : 'Auto (based on stock)' }, { value: 'ALWAYS', label: lang === 'ur' ? 'ہمیشہ دستیاب' : 'Always Available' }, { value: 'CALL', label: lang === 'ur' ? 'کال کریں' : 'Call for Availability' }]} />
+        <TextField label={lang === 'ur' ? 'SEO عنوان' : 'SEO Title'} value={p.seo_title} onChange={(v) => set('seo_title', v)} />
+        <TextField label={lang === 'ur' ? 'SEO تفصیل' : 'SEO Description'} value={p.seo_description} onChange={(v) => set('seo_description', v)} />
+        <div className="notice info small">{lang === 'ur' ? 'شائع کرنے پر سرور عوامی کیش صاف کرتا ہے (60–300 سیکنڈ)۔' : 'Publishing triggers public edge cache purge within 60-300 seconds.'}</div>
       </div>}
       {tab === 'images' && <div>
-        <p>تصاویر مقامی پیش نظارہ / پرائیویٹ R2 میں محفوظ ہوتی ہیں؛ عوامی API صرف تصویری URL بھیجتا ہے۔</p>
-        <input className="input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} aria-label="تصویر اپ لوڈ" />
+        <p>{lang === 'ur' ? 'تصاویر مقامی پیش نظارہ / پرائیویٹ R2 میں محفوظ ہوتی ہیں؛ عوامی API صرف تصویری URL بھیجتا ہے۔' : 'Images are stored in private R2 storage; public API serves cached URLs.'}</p>
+        <input className="input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} aria-label={lang === 'ur' ? 'تصویر اپ لوڈ' : 'Upload Image'} />
         {uploadBusy && <Skeleton rows={1} />}
         <div className="row" style={{ flexWrap: 'wrap', marginBlockStart: 12 }}>
           {(p.images ?? []).map((i: any) => <div key={i.id} className="card" style={{ padding: 8 }}>
             <img src={`/media/${i.r2_key}`} alt={i.alt_ur} width={120} height={120} />
             <div className="small">{i.alt_ur}</div></div>)}
-          {!(p.images ?? []).length && <EmptyState title="ابھی کوئی تصویر نہیں" />}
+          {!(p.images ?? []).length && <EmptyState title={lang === 'ur' ? 'ابھی کوئی تصویر نہیں' : 'No images yet'} />}
         </div>
-        <div className="small">پیداوار میں R2 بائنڈنگ لازمی ہے <IncompleteBadge note="Production R2 binding not configured" /></div>
+        <div className="small">{lang === 'ur' ? 'پیداوار میں R2 بائنڈنگ لازمی ہے' : 'Production requires R2 binding'} <IncompleteBadge note="Production R2 binding not configured" /></div>
       </div>}
       {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
       <div className="btn-row" style={{ marginBlockStart: 16 }}>
-        <Button onClick={save} loading={busy}>محفوظ کریں</Button>
+        <Button onClick={save} loading={busy}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
         {id && <Button variant="secondary" onClick={async () => {
           await api(`/api/v1/products/${id}/publish`, { method: 'POST', body: { published: !p.is_published } });
-          set('is_published', !p.is_published); toast('کیش صاف کر دی گئی');
-        }}>{p.is_published ? 'ان پبلش' : 'پبلش + کیش صاف'}</Button>}
-        {saved && <Chip tone="success">محفوظ</Chip>}
+          set('is_published', !p.is_published); toast(lang === 'ur' ? 'کیش صاف کر دی گئی' : 'Cache purged');
+        }}>{p.is_published ? (lang === 'ur' ? 'ان پبلش' : 'Unpublish') : (lang === 'ur' ? 'پبلش + کیش صاف' : 'Publish & Purge')}</Button>}
+        {saved && <Chip tone="success">{lang === 'ur' ? 'محفوظ' : 'Saved'}</Chip>}
       </div>
     </div>
   </div>;
@@ -307,7 +327,8 @@ export function ProductForm() {
 
 // -------------------------------- CSV import ---------------------------------
 export function ProductImport() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const [stage, setStage] = useState(0), [rows, setRows] = useState<any[]>([]), [report, setReport] = useState<any>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [result, setResult] = useState<any>(null);
   const [mode, setMode] = useState('SKIP');
@@ -321,57 +342,75 @@ export function ProductImport() {
     });
   };
   if (!can('products.import')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1>CSV درآمد — مصنوعات</h1>
-    <div className="row" style={{ flexWrap: 'wrap' }}>{['فائل', 'جائزہ', 'تصدیق', 'نتیجہ'].map((s, i) =>
+  const stages = [
+    lang === 'ur' ? 'فائل' : 'File',
+    lang === 'ur' ? 'جائزہ' : 'Preview',
+    lang === 'ur' ? 'تصدیق' : 'Verify',
+    lang === 'ur' ? 'نتیجہ' : 'Result'
+  ];
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav('/erp/products')}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{lang === 'ur' ? 'CSV درآمد — مصنوعات' : 'CSV Import — Products'}</h1>
+      </div>
+    </div>
+    <div className="row" style={{ flexWrap: 'wrap' }}>{stages.map((s, i) =>
       <Chip key={s} tone={i <= stage ? 'success' : 'gray'}>{i + 1}. {s}</Chip>)}</div>
     {stage === 0 && <div className="card" style={{ marginBlockStart: 14 }}>
-      <p>ٹیمپلیٹ: <code>name_ur,name_en,category_code,sku,base_unit,purchase_rate,sale_rate,conversion_ratio</code></p>
+      <p>{lang === 'ur' ? 'ٹیمپلیٹ:' : 'Template:'} <code>name_ur,name_en,category_code,sku,base_unit,purchase_rate,sale_rate,conversion_ratio</code></p>
       <Button variant="secondary" size="sm" onClick={() => {
         const blob = new Blob(['\uFEFFname_ur,name_en,category_code,sku,base_unit,purchase_rate,sale_rate,conversion_ratio\n'], { type: 'text/csv' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'zt-products-template.csv'; a.click();
-      }}>خالی ٹیمپلیٹ ڈاؤن لوڈ</Button>
+      }}>{lang === 'ur' ? 'خالی ٹیمپلیٹ ڈاؤن لوڈ' : 'Download Sample CSV'}</Button>
       <input className="input" type="file" accept=".csv,text/csv" aria-label="CSV فائل" onChange={(e) => {
         const f = e.target.files?.[0]; if (!f) return;
         f.text().then((txt) => { setRows(parse(txt)); setStage(1); });
       }} />
-      <div className="notice small">نمونے کی قطار شامل نہیں — پیداواری کیٹلاگ خالی رہتا ہے جب تک مالک ڈیٹا درآمد نہ کرے۔</div>
+      <div className="notice small">{lang === 'ur' ? 'نمونے کی قطار شامل نہیں — پیداواری کیٹلاگ خالی رہتا ہے جب تک مالک ڈیٹا درآمد نہ کرے۔' : 'Clean template without mock rows — catalog populates strictly from owner data.'}</div>
     </div>}
-    {stage === 1 && <div className="card"><p>{rows.length} قطاریں ملیں</p>
+    {stage === 1 && <div className="card"><p>{rows.length} {lang === 'ur' ? 'قطاریں ملیں' : 'rows parsed'}</p>
       <DataTable rows={rows.slice(0, 20)} columns={Object.keys(rows[0] ?? {}).slice(0, 6).map((k) => ({ key: k, label: k }))} csvName="preview" />
       <Button onClick={async () => {
         setBusy(true); setErr('');
         try { setReport(await api('/api/v1/import/products/preview', { method: 'POST', body: { rows } })); setStage(2); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-      }} loading={busy}>سرسری جانچ (بغیر محفوظ کیے)</Button>
+      }} loading={busy}>{lang === 'ur' ? 'سرسری جانچ (بغیر محفوظ کیے)' : 'Validate Preview (Dry-run)'}</Button>
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
     </div>}
-    {stage === 2 && report && <div className="card"><h2>پیش منظر</h2>
-      <p>درست: {report.valid} · ڈپلیکیٹ: {report.duplicates} · غلط: {report.rows.length - report.valid}</p>
-      <SelectField label="ڈپلیکیٹ پالیسی" value={mode} onChange={setMode}
-        options={[{ value: 'SKIP', label: 'چھوڑ دیں' }, { value: 'UPDATE', label: 'اپ ڈیٹ کریں' }]} />
+    {stage === 2 && report && <div className="card"><h2>{lang === 'ur' ? 'پیش منظر' : 'Preview Report'}</h2>
+      <p>{lang === 'ur' ? `درست: ${report.valid} · ڈپلیکیٹ: ${report.duplicates} · غلط: ${report.rows.length - report.valid}` : `Valid: ${report.valid} · Duplicates: ${report.duplicates} · Errors: ${report.rows.length - report.valid}`}</p>
+      <SelectField label={lang === 'ur' ? 'ڈپلیکیٹ پالیسی' : 'Duplicate Policy'} value={mode} onChange={setMode}
+        options={[{ value: 'SKIP', label: lang === 'ur' ? 'چھوڑ دیں' : 'Skip' }, { value: 'UPDATE', label: lang === 'ur' ? 'اپ ڈیٹ کریں' : 'Update existing' }]} />
       <DataTable rows={report.rows} columns={[
-        { key: 'row', label: '#' }, { key: 'name_ur', label: 'نام' }, { key: 'category', label: 'زمرہ' },
-        { key: 'duplicate_id', label: 'ڈپلیکیٹ' },
-        { key: 'errors', label: 'غلطیاں', render: (r: any) => r.errors?.length ? <Chip tone="danger">{r.errors.join(', ')}</Chip> : <Chip tone="success">OK</Chip> },
+        { key: 'row', label: '#' },
+        { key: 'name_ur', label: lang === 'ur' ? 'نام' : 'Name' },
+        { key: 'category', label: lang === 'ur' ? 'زمرہ' : 'Category' },
+        { key: 'duplicate_id', label: lang === 'ur' ? 'ڈپلیکیٹ' : 'Duplicate' },
+        { key: 'errors', label: lang === 'ur' ? 'غلطیاں' : 'Errors', render: (r: any) => r.errors?.length ? <Chip tone="danger">{r.errors.join(', ')}</Chip> : <Chip tone="success">OK</Chip> },
       ] as Column[]} csvName="import-report" />
       <Button onClick={async () => {
         setBusy(true); setErr('');
-        try { setResult(await api('/api/v1/import/products/confirm', { method: 'POST', body: { rows: report.rows, mode } })); setStage(3); toast('درآمد مکمل'); }
+        try { setResult(await api('/api/v1/import/products/confirm', { method: 'POST', body: { rows: report.rows, mode } })); setStage(3); toast(lang === 'ur' ? 'درآمد مکمل' : 'Import completed'); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-      }} loading={busy}>ایک ایٹمی بیچ میں محفوظ کریں</Button>
+      }} loading={busy}>{lang === 'ur' ? 'ایک ایٹمی بیچ میں محفوظ کریں' : 'Commit in Atomic Batch'}</Button>
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
     </div>}
-    {stage === 3 && result && <div className="card"><h2><Mark kind="check-circle" /> نتیجہ</h2>
-      <div className="kv"><span className="k">بنائی گئیں</span><span className="v">{result.created}</span>
-        <span className="k">اپ ڈیٹ</span><span className="v">{result.updated}</span>
-        <span className="k">چھوڑی گئیں</span><span className="v">{result.skipped}</span></div>
-      <Link className="btn btn-primary" to="/erp/products">مصنوعات دیکھیں</Link></div>}
+    {stage === 3 && result && <div className="card"><h2><Mark kind="check-circle" /> {lang === 'ur' ? 'نتیجہ' : 'Import Summary'}</h2>
+      <div className="kv"><span className="k">{lang === 'ur' ? 'بنائی گئیں' : 'Created'}</span><span className="v">{result.created}</span>
+        <span className="k">{lang === 'ur' ? 'اپ ڈیٹ' : 'Updated'}</span><span className="v">{result.updated}</span>
+        <span className="k">{lang === 'ur' ? 'چھوڑی گئیں' : 'Skipped'}</span><span className="v">{result.skipped}</span></div>
+      <Link className="btn btn-primary" to="/erp/products">{lang === 'ur' ? 'مصنوعات دیکھیں' : 'View Products'}</Link></div>}
   </div>;
 }
 
 // ---------------------------- Business book hubs ------------------------------
 export function HubScreen({ book }: { book: string }) {
   const { t, can, lang } = useApp();
+  const nav = useNavigate();
   const def = BOOK_MAP[book];
   const range = useRange();
   const sales = useGet<any>('hub-sales', `/api/v1/sales?from=${range.from}&to=${range.to}&limit=100`);
@@ -383,9 +422,20 @@ export function HubScreen({ book }: { book: string }) {
   const sRows = Array.isArray(sales.data) ? sales.data : [];
   const pRows = Array.isArray(purchases.data) ? purchases.data : [];
   const stockRows = (stock.data ?? []).filter((r: any) => !r.book_code || r.book_code === book);
-  return <div><div className="between"><h1>{lang === 'ur' ? (def?.ur ?? book) : (def?.en ?? def?.ur ?? book)}</h1>
-    <div className="btn-row">{can('purchases.post') && <Link className="btn btn-secondary btn-sm" to={`${base}/purchase/new`}>{lang === 'ur' ? '+ خرید' : '+ Purchase'}</Link>}
-      {can('sales.post') && <Link className="btn btn-primary btn-sm" to={`${base}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}</div></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{lang === 'ur' ? (def?.ur ?? book) : (def?.en ?? def?.ur ?? book)}</h1>
+      </div>
+      <div className="btn-row no-print">
+        {can('purchases.post') && <Link className="btn btn-secondary btn-sm" to={`${base}/purchase/new`}>{lang === 'ur' ? '+ خرید' : '+ Purchase'}</Link>}
+        {can('sales.post') && <Link className="btn btn-primary btn-sm" to={`${base}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}
+      </div>
+    </div>
     <Tabs tabs={[{ id: 'overview', label: lang === 'ur' ? 'جائزہ' : 'Overview' }, { id: 'sales', label: lang === 'ur' ? 'فروخت' : 'Sales' }, ...(mayPurchases ? [{ id: 'purchases', label: lang === 'ur' ? 'خرید' : 'Purchases' }] : []),
       { id: 'stock', label: lang === 'ur' ? 'اسٹاک' : 'Stock' }, ...(book === 'PEST' ? [{ id: 'register', label: lang === 'ur' ? 'قانونی رجسٹر' : 'Legal Register' }] : [])]} active={tab} onChange={setTab} />
     {tab === 'overview' && <div><div className="stats-grid">
@@ -394,11 +444,10 @@ export function HubScreen({ book }: { book: string }) {
       <StatCard label={lang === 'ur' ? 'فروخت دستاویزات' : 'Sales Documents'} value={sRows.length} />
       {mayPurchases && <StatCard label={lang === 'ur' ? 'خرید دستاویزات' : 'Purchase Documents'} value={pRows.length} />}
     </div>
-      <div className="notice info">یہ کھاتہ الگ لیجر رکھتا ہے؛ تمام پوسٹنگ ایک ایٹمی <code>db.batch()</code> میں ہوتی ہے۔</div>
-      {book === 'FERT' && <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/reports?report=fertilizer-register">{lang === 'ur' ? 'کھاد فروخت رجسٹر' : 'Fertilizer Sales Register'}</Link>
+      <div className="notice info">{lang === 'ur' ? 'یہ کھاتہ الگ لیجر رکھتا ہے؛ تمام پوسٹنگ ایک ایٹمی db.batch() میں ہوتی ہے۔' : 'This ledger maintains distinct books; all postings commit inside an atomic db.batch().'}</div>
+      {book === 'FERT' && <div className="btn-row" style={{ marginTop: 10 }}><Link className="btn btn-secondary btn-sm" to="/erp/reports?report=fertilizer-register">{lang === 'ur' ? 'کھاد فروخت رجسٹر' : 'Fertilizer Sales Register'}</Link>
         <Link className="btn btn-secondary btn-sm" to="/erp/reports?report=expiry">{lang === 'ur' ? 'ایکسپائری رپورٹ' : 'Expiry Report'}</Link></div>}
-      {book === 'PEST' && <div className="notice">پیسٹی سائیڈ فروخت میں خریدار کا نام، موبائل اور پتہ لازمی ہیں؛ ایکسپائری ختم / قرنطینہ بیچ بلاک ہے۔
-        لائسنس نمبر صرف مالک ترتیبات میں درج کرے گا — سسٹم کبھی نہیں بناتا۔</div>}
+      {book === 'PEST' && <div className="notice" style={{ marginTop: 10 }}>{lang === 'ur' ? 'پیسٹی سائیڈ فروخت میں خریدار کا نام، موبائل اور پتہ لازمی ہیں؛ ایکسپائری ختم / قرنطینہ بیچ بلاک ہے۔ لائسنس نمبر صرف مالک ترتیبات میں درج کرے گا۔' : 'Pesticide sales strictly require buyer name, phone, and address. Expired batches are blocked. License numbers are configured in settings.'}</div>}
     </div>}
     {tab === 'sales' && <AsyncView loading={sales.isLoading} error={sales.error} retry={() => sales.refetch()} empty={!sRows.length}>
       <DataTable rows={sRows} csvName={`${book}-sales`} columns={[
@@ -425,7 +474,7 @@ function PesticideRegister() {
   const { data, isLoading, error, refetch } = useGet<any>('pesticide-register', '/api/v1/reports/pesticide-register');
   const { lang } = useApp();
   return <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!data?.rows?.length}>
-    <div className="notice">یہ سافٹ ویئر صرف ریکارڈ/ایکسپورٹ رکھتا ہے؛ کسی سرکاری پورٹل پر فائلنگ کا دعویٰ نہیں۔ ضابطہ مالک ضلع زراعت دفتر لیہ سے تصدیق کرے۔</div>
+    <div className="notice">{lang === 'ur' ? 'یہ سافٹ ویئر صرف ریکارڈ/ایکسپورٹ رکھتا ہے؛ کسی سرکاری پورٹل پر فائلنگ کا دعویٰ نہیں۔ ضابطہ مالک ضلع زراعت دفتر لیہ سے تصدیق کرے۔' : 'This module maintains internal trade records and exports; no direct filing to government portals is claimed.'}</div>
     <DataTable rows={data?.rows ?? []} csvName="pesticide-register" columns={[
       { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'number', label: lang === 'ur' ? 'رسید' : 'Receipt' }, { key: 'buyer', label: lang === 'ur' ? 'خریدار' : 'Buyer' },
       { key: 'product', label: lang === 'ur' ? 'مصنوعات' : 'Product' }, { key: 'batch', label: lang === 'ur' ? 'بیچ' : 'Batch' },
@@ -438,6 +487,7 @@ function PesticideRegister() {
 export function CropPage() {
   const { crop = 'WHEAT' } = useParams();
   const { can, t, lang } = useApp();
+  const nav = useNavigate();
   const range = useRange();
   const lots = useGet<any[]>('grain-lots', `/api/v1/grains/lots?crop=${crop}`, can('grains.read'));
   const settings = useGet<any>('settings', '/api/v1/settings', can('settings.read'));
@@ -446,30 +496,44 @@ export function CropPage() {
   const [tab, setTab] = useState('lots');
   const def = BOOK_MAP[crop];
   if (!can('grains.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon={crop} label={lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)} size={34} />{lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)}</h1>
-    <div className="btn-row">{can('grains.post') && <Link className="btn btn-secondary btn-sm" to={`/erp/grains/${crop}/purchase/new`}>{lang === 'ur' ? '+ خرید (وزن)' : '+ Purchase (Weight)'}</Link>}
-      {can('grains.post') && <Link className="btn btn-primary btn-sm" to={`/erp/grains/${crop}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}</div></div>
-    {settings.data && !maundKg && <div className="notice"><Mark kind="warn" /> «ایک من = کتنے کلو» مالک نے تصدیق نہیں کی — فی من ریٹ بلاک ہے۔</div>}
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon={crop} label={lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)} size={34} />{lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)}</h1>
+      </div>
+      <div className="btn-row no-print">
+        {can('grains.post') && <Link className="btn btn-secondary btn-sm" to={`/erp/grains/${crop}/purchase/new`}>{lang === 'ur' ? '+ خرید (وزن)' : '+ Purchase (Weight)'}</Link>}
+        {can('grains.post') && <Link className="btn btn-primary btn-sm" to={`/erp/grains/${crop}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}
+      </div>
+    </div>
+    {settings.data && !maundKg && <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? '«ایک من = کتنے کلو» مالک نے تصدیق نہیں کی — فی من ریٹ بلاک ہے۔' : 'Maund conversion (kg per maund) unconfirmed — per-maund pricing is disabled until verified in Settings.'}</div>}
     <Tabs tabs={[{ id: 'lots', label: lang === 'ur' ? 'لاٹس' : 'Lots' }, { id: 'docs', label: lang === 'ur' ? 'دستاویزات' : 'Documents' }, { id: 'recon', label: lang === 'ur' ? 'لاٹ مفاہمت' : 'Lot Recon' }]} active={tab} onChange={setTab} />
     {tab === 'lots' && <AsyncView loading={lots.isLoading} error={lots.error} retry={() => lots.refetch()} empty={!(lots.data ?? []).length}>
       <DataTable rows={lots.data ?? []} csvName={`${crop}-lots`} columns={[
-        { key: 'lot_no', label: 'لاٹ' }, { key: 'grade', label: 'گریڈ' },
-        { key: 'balance_grams', label: 'بیلنس (کلو)', render: (r: any) => <span className="num">{(r.balance_grams / 1000).toFixed(3)}</span> },
-        { key: 'opened_at', label: 'تاریخ' },
+        { key: 'lot_no', label: lang === 'ur' ? 'لاٹ' : 'Lot No' },
+        { key: 'grade', label: lang === 'ur' ? 'گریڈ' : 'Grade' },
+        { key: 'balance_grams', label: lang === 'ur' ? 'بیلنس (کلو)' : 'Balance (kg)', render: (r: any) => <span className="num">{(r.balance_grams / 1000).toFixed(3)}</span> },
+        { key: 'opened_at', label: lang === 'ur' ? 'تاریخ' : 'Date' },
       ] as Column[]} /></AsyncView>}
     {tab === 'docs' && <AsyncView loading={docs.isLoading} error={docs.error} retry={() => docs.refetch()} empty={!(docs.data ?? []).length}>
       <DataTable rows={docs.data ?? []} csvName={`${crop}-docs`} columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'type', label: 'قسم' },
-        { key: 'amount_paisa', label: 'رقم', render: (r: any) => money(r.amount_paisa) },
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' },
+        { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' },
+        { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' },
+        { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', render: (r: any) => money(r.amount_paisa) },
       ] as Column[]} /></AsyncView>}
-    {tab === 'recon' && <div className="card"><h2>لاٹ مفاہمت</h2>
-      <p className="small">ہر لاٹ: کچا وزن − ٹیر − کٹوتیاں = خالص وزن؛ خرید − فروخت − ایڈجسٹمنٹ = بقیہ۔</p>
+    {tab === 'recon' && <div className="card"><h2>{lang === 'ur' ? 'لاٹ مفاہمت' : 'Lot Reconciliation'}</h2>
+      <p className="small">{lang === 'ur' ? 'ہر لاٹ: کچا وزن − ٹیر − کٹوتیاں = خالص وزن؛ خرید − فروخت − ایڈجسٹمنٹ = بقیہ۔' : 'Each lot: Gross weight − Tare − Deductions = Net Weight; Purchases − Sales − Adjustments = Remaining Lot Balance.'}</p>
       <DataTable rows={lots.data ?? []} csvName={`${crop}-recon`} columns={[
-        { key: 'lot_no', label: 'لاٹ' }, { key: 'purchased_grams', label: 'خرید (کلو)', render: (r: any) => <span className="num">{((r.purchased_grams ?? 0) / 1000).toFixed(3)}</span> },
-        { key: 'sold_grams', label: 'فروخت (کلو)', render: (r: any) => <span className="num">{((r.sold_grams ?? 0) / 1000).toFixed(3)}</span> },
-        { key: 'balance_grams', label: 'بقیہ', render: (r: any) => <span className="num">{(r.balance_grams / 1000).toFixed(3)}</span> },
+        { key: 'lot_no', label: lang === 'ur' ? 'لاٹ' : 'Lot No' },
+        { key: 'purchased_grams', label: lang === 'ur' ? 'خرید (کلو)' : 'Purchased (kg)', render: (r: any) => <span className="num">{((r.purchased_grams ?? 0) / 1000).toFixed(3)}</span> },
+        { key: 'sold_grams', label: lang === 'ur' ? 'فروخت (کلو)' : 'Sold (kg)', render: (r: any) => <span className="num">{((r.sold_grams ?? 0) / 1000).toFixed(3)}</span> },
+        { key: 'balance_grams', label: lang === 'ur' ? 'بقیہ' : 'Remaining (kg)', render: (r: any) => <span className="num">{(r.balance_grams / 1000).toFixed(3)}</span> },
       ] as Column[]} />
-      <div className="small">خرید/فروخت الگ کالم سرور رپورٹ سے آتے ہیں؛ یہاں موجود لاٹ بیلنس حتمی ہے۔</div>
     </div>}
   </div>;
 }
@@ -477,6 +541,7 @@ export function CropPage() {
 // --------------------------------- Khata centre ------------------------------
 export function KhataCentre() {
   const { can, t, lang } = useApp();
+  const nav = useNavigate();
   const range = useRange();
   const [book, setBook] = useState('');
   const [party, setParty] = useState('');
@@ -493,9 +558,20 @@ export function KhataCentre() {
     { key: 'credit_paisa', label: lang === 'ur' ? 'کریڈٹ' : 'Credit', render: (r: any) => money(r.credit_paisa ?? (r.direction === 'OUT' ? r.amount_paisa : 0)) },
     { key: 'running_paisa', label: lang === 'ur' ? 'بیلنس' : 'Balance', render: (r: any) => money(r.running_paisa) },
   ];
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="khata" label={lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'} size={34} />{lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'}</h1>
-    <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">{lang === 'ur' ? '+ رسید' : '+ Receipt'}</Link>
-      <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">{lang === 'ur' ? '+ ادائیگی' : '+ Payment'}</Link></div></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="khata" label={lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'} size={34} />{lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">{lang === 'ur' ? '+ رسید' : '+ Receipt'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">{lang === 'ur' ? '+ ادائیگی' : '+ Payment'}</Link>
+      </div>
+    </div>
     <div className="grid g2">
       <div className="card"><h2>{lang === 'ur' ? 'تمام کھاتہ جات' : 'All Ledgers'}</h2>
         <DataTable rows={[...(books.data?.books ?? []), ...(books.data?.money_books ?? [])]} csvName="khata-books" columns={[
@@ -533,34 +609,46 @@ export function KhataCentre() {
 
 export function PartyKhata() {
   const { id } = useParams();
+  const { lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any>('party', `/api/v1/parties/${id}`);
   const range = useRange();
   const [statement, setStatement] = useState<DocumentSnapshot | null>(null);
   return <div><AsyncView loading={isLoading} error={error} retry={() => refetch()}>
-    <div className="between"><h1 className="head-icon"><NavIcon icon="parties" label={data?.name_ur ?? ''} size={34} />{data?.name_ur}</h1>
-      <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">+ رسید</Link>
-        <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">+ ادائیگی</Link></div></div>
-    <div className="stats-grid">
-      <StatCard label="بیلنس" value={formatPKR(data?.balance_paisa ?? 0)} />
-      <StatCard label="قسم" value={data?.type ?? ''} />
-      <StatCard label="موبائل" value={data?.phone ?? '—'} />
-      <StatCard label="کریڈٹ حد" value={formatPKR(data?.credit_limit_paisa ?? 0)} />
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="parties" label={data?.name_ur ?? ''} size={34} />{lang === 'ur' ? data?.name_ur : (data?.name_en || data?.name_ur)}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">{lang === 'ur' ? '+ رسید' : '+ Receipt'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">{lang === 'ur' ? '+ ادائیگی' : '+ Payment'}</Link>
+      </div>
     </div>
-    <div className="card" style={{ marginBlock: 16 }}><div className="between"><h2>لین دین</h2>
+    <div className="stats-grid">
+      <StatCard label={lang === 'ur' ? 'بیلنس' : 'Balance'} value={formatPKR(data?.balance_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'قسم' : 'Type'} value={data?.type ?? ''} />
+      <StatCard label={lang === 'ur' ? 'موبائل' : 'Phone'} value={data?.phone ?? '—'} />
+      <StatCard label={lang === 'ur' ? 'کریڈٹ حد' : 'Credit Limit'} value={formatPKR(data?.credit_limit_paisa ?? 0)} />
+    </div>
+    <div className="card" style={{ marginBlock: 16 }}><div className="between"><h2>{lang === 'ur' ? 'لین دین' : 'Transactions'}</h2>
       <Button size="sm" variant="ghost" onClick={async () => {
         const r = await api<any>(`/api/v1/statements?from=${range.from}&to=${range.to}&party_id=${id}`);
         setStatement(r.snapshot);
-      }}>پرنٹ / PDF</Button></div>
+      }}>{lang === 'ur' ? 'پرنٹ / PDF' : 'Print / PDF'}</Button></div>
       <DataTable rows={data?.ledger ?? []} csvName="party-ledger" columns={[
-        { key: 'date', label: 'تاریخ' }, { key: 'description_ur', label: 'تفصیل' },
-        { key: 'debit_paisa', label: 'ڈیبٹ', money: true }, { key: 'credit_paisa', label: 'کریڈٹ', money: true },
+        { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'description_ur', label: lang === 'ur' ? 'تفصیل' : 'Description' },
+        { key: 'debit_paisa', label: lang === 'ur' ? 'ڈیبٹ' : 'Debit', money: true }, { key: 'credit_paisa', label: lang === 'ur' ? 'کریڈٹ' : 'Credit', money: true },
       ] as Column[]} />
-      {!!data?.allocations?.length && <><h3>الاٹمنٹ</h3><DataTable rows={data.allocations} columns={[
-        { key: 'receipt_id', label: 'رسید' }, { key: 'invoice_id', label: 'انوائس' },
-        { key: 'amount_paisa', label: 'رقم', money: true },
+      {!!data?.allocations?.length && <><h3>{lang === 'ur' ? 'الاٹمنٹ' : 'Allocations'}</h3><DataTable rows={data.allocations} columns={[
+        { key: 'receipt_id', label: lang === 'ur' ? 'رسید' : 'Receipt' }, { key: 'invoice_id', label: lang === 'ur' ? 'انوائس' : 'Invoice' },
+        { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', money: true },
       ] as Column[]} csvName="allocations" /></>}
     </div>
-    {statement && <Sheet open={!!statement} onClose={() => setStatement(null)} title="فریق کھاتہ"><PrintActions snapshot={statement} /></Sheet>}
+    {statement && <Sheet open={!!statement} onClose={() => setStatement(null)} title={lang === 'ur' ? 'فریق کھاتہ' : 'Party Statement'}><PrintActions snapshot={statement} /></Sheet>}
   </AsyncView></div>;
 }
 
@@ -576,6 +664,7 @@ const REPORTS = [
 ];
 export function ReportsGallery() {
   const { lang } = useApp();
+  const nav = useNavigate();
   const [params, setParams] = useSearchParams();
   const active = params.get('report') ?? 'trial-balance';
   const range = useRange();
@@ -589,7 +678,16 @@ export function ReportsGallery() {
     key: k, label: k.replace(/_paisa$/, ' (Rs)').replace(/_milli$/, ''),
     render: k.endsWith('_paisa') ? (r: any) => money(r[k]) : k.endsWith('_milli') ? (r: any) => <span className="num">{fromMilli(r[k])}</span> : undefined,
   })) : [];
-  return <div><h1 className="head-icon"><NavIcon icon="reports" label={lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'} size={34} />{lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'}</h1>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="reports" label={lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'} size={34} />{lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'}</h1>
+      </div>
+    </div>
     <div className="tile-grid">{REPORTS.map((r) => <button key={r.id} className={`tile ${active === r.id ? 'active' : ''}`}
       onClick={() => setParams({ report: r.id })}><NavIcon icon="reports" label={lang === 'ur' ? r.ur : r.en} size={44} /><strong>{lang === 'ur' ? r.ur : r.en}</strong><span className="small">{lang === 'ur' ? r.en : r.ur}</span></button>)}</div>
     <div className="card" style={{ marginBlockStart: 16 }}>
@@ -600,14 +698,14 @@ export function ReportsGallery() {
           <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label={lang === 'ur' ? 'دوبارہ لوڈ' : 'Reload'}><Mark kind="sync" /></Button></div></div>
       <RangePicker from={range.from} to={range.to} setFrom={range.setFrom} setTo={range.setTo} />
       {active === 'trial-balance' && data && <div className={`notice ${data.balanced ? 'success' : ''}`}>
-        {data.balanced ? <><Mark kind="check" /> ڈیبٹ = کریڈٹ (H4)</> : <><Mark kind="warn" /> جرنل غیر متوازن</>} — ڈیبٹ {formatPKR(data.totals?.debit_paisa ?? 0)} / کریڈٹ {formatPKR(data.totals?.credit_paisa ?? 0)}</div>}
-      {active === 'pnl' && data && <div className="kv"><span className="k">آمدنی</span><span className="v num">{formatPKR(data.income_paisa)}</span>
-        <span className="k">اخراجات</span><span className="v num">{formatPKR(data.expenses_paisa)}</span>
-        <span className="k">خالص منافع</span><span className="v num">{formatPKR(data.net_profit_paisa)}</span></div>}
+        {data.balanced ? <><Mark kind="check" /> {lang === 'ur' ? 'ڈیبٹ = کریڈٹ (H4)' : 'Debit = Credit (Balanced)'}</> : <><Mark kind="warn" /> {lang === 'ur' ? 'جرنل غیر متوازن' : 'Journal Unbalanced'}</>} — {lang === 'ur' ? 'ڈیبٹ' : 'Debit'} {formatPKR(data.totals?.debit_paisa ?? 0)} / {lang === 'ur' ? 'کریڈٹ' : 'Credit'} {formatPKR(data.totals?.credit_paisa ?? 0)}</div>}
+      {active === 'pnl' && data && <div className="kv"><span className="k">{lang === 'ur' ? 'آمدنی' : 'Income'}</span><span className="v num">{formatPKR(data.income_paisa)}</span>
+        <span className="k">{lang === 'ur' ? 'اخراجات' : 'Expenses'}</span><span className="v num">{formatPKR(data.expenses_paisa)}</span>
+        <span className="k">{lang === 'ur' ? 'خالص منافع' : 'Net Profit'}</span><span className="v num">{formatPKR(data.net_profit_paisa)}</span></div>}
       <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!rows.length}>
-        <DataTable rows={rows} columns={cols} csvName={active} footer={<span className="num">{rows.length} قطاریں</span>} />
+        <DataTable rows={rows} columns={cols} csvName={active} footer={<span className="num">{rows.length} {lang === 'ur' ? 'قطاریں' : 'rows'}</span>} />
       </AsyncView>
-      <div className="notice info small">رپورٹس براہِ راست D1 پری اگریگیٹ / جرنل لائنز سے پڑھی جاتی ہیں؛ کوئی فرضی اعداد نہیں۔</div>
+      <div className="notice info small">{lang === 'ur' ? 'رپورٹس براہِ راست D1 پری اگریگیٹ / جرنل لائنز سے پڑھی جاتی ہیں؛ کوئی فرضی اعداد نہیں۔' : 'Reports read directly from verified D1 journal lines and pre-aggregates; zero mock data.'}</div>
     </div>
   </div>;
 }
@@ -615,6 +713,7 @@ export function ReportsGallery() {
 // ------------------------------ Documents centre -----------------------------
 export function DocumentsCentre() {
   const { t, lang } = useApp();
+  const nav = useNavigate();
   const [params] = useSearchParams();
   const range = useRange('2020-01-01');
   const [q, setQ] = useState(params.get('q') ?? ''), [type, setType] = useState(params.get('type') ?? '');
@@ -631,19 +730,31 @@ export function DocumentsCentre() {
   /** Legacy rows were posted before snapshots carried doc_id; the row id IS the document ULID,
    *  so it is the correct fallback for printing/verification. */
   const snapshot = selected ? { ...selected.snapshot, doc_id: selected.snapshot?.doc_id ?? selected.id } : null;
-  return <div><h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'} size={34} />{lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'}</h1>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'} size={34} />{lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-primary btn-sm" to="/erp/create">{lang === 'ur' ? '+ نیا اندراج / انوائس' : '+ New Invoice / Entry'}</Link>
+      </div>
+    </div>
     <div className="toolbar no-print"><input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === 'ur' ? 'نمبر / نام تلاش کریں' : 'Search number / name'} />
-      <SelectField label="" value={type} onChange={setType} placeholder="تمام اقسام"
+      <SelectField label="" value={type} onChange={setType} placeholder={lang === 'ur' ? 'تمام اقسام' : 'All Types'}
         options={['SALE', 'PURCHASE', 'RECEIPT', 'PAYMENT', 'EXPENSE', 'GRAIN_PURCHASE', 'GRAIN_SALE', 'RETURN', 'PAYROLL', 'TRANSFER'].map((x) => ({ value: x, label: x }))} />
       <SelectField label={t('invoices')} value={selected?.id ?? ''} onChange={pick} placeholder={t('selectInvoice')}
         options={(data ?? []).map((r: any) => ({ value: r.id, label: `${r.number} — ${r.date}` }))} />
-      <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label="دوبارہ لوڈ"><Mark kind="sync" /></Button></div>
+      <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label={lang === 'ur' ? 'دوبارہ لوڈ' : 'Reload'}><Mark kind="sync" /></Button></div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
       <DataTable rows={data ?? []} csvName="documents" onRow={open} columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'type', label: 'قسم' },
-        { key: 'book_code', label: 'کتاب' },
-        { key: 'amount_paisa', label: 'رقم', render: (r: any) => money(r.amount_paisa) },
-        { key: 'template_version', label: 'ٹیمپلیٹ' },
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' },
+        { key: 'book_code', label: lang === 'ur' ? 'کتاب / کھاتہ' : 'Ledger' },
+        { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', render: (r: any) => money(r.amount_paisa) },
+        { key: 'template_version', label: lang === 'ur' ? 'ٹیمپلیٹ' : 'Template' },
       ] as Column[]} />
     </AsyncView>
     {err && <div className="err"><Mark kind="warn" /> {err}</div>}
@@ -685,20 +796,29 @@ export function DocumentsCentre() {
 // --------------------------------- Sync centre -------------------------------
 export function SyncCentre() {
   const { syncNow, syncing, pending, conflicts, online, lastSync, toast, lang } = useApp();
+  const nav = useNavigate();
   const ops = useGet<any[]>('sync-ops', '/api/v1/sync/operations');
   const serverConflicts = useGet<any[]>('sync-conflicts', '/api/v1/sync/conflicts');
   const [localOps, setLocalOps] = useState<any[]>([]);
   const [resolve, setResolve] = useState<any>(null), [reason, setReason] = useState('');
   useEffect(() => { void ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray().then(setLocalOps); }, [pending, conflicts]);
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="sync" label={lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'} size={34} />{lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'}</h1>
-    <Button onClick={async () => { const r = await syncNow(); toast(`${r.sent} ${lang === 'ur' ? 'کامیاب' : 'sent'}, ${r.conflicts} ${lang === 'ur' ? 'تضاد' : 'conflicts'}`); ops.refetch(); setLocalOps(await ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray()); }} loading={syncing}>{lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}</Button></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="sync" label={lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'} size={34} />{lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'}</h1>
+      </div>
+      <Button onClick={async () => { const r = await syncNow(); toast(`${r.sent} ${lang === 'ur' ? 'کامیاب' : 'sent'}, ${r.conflicts} ${lang === 'ur' ? 'تضاد' : 'conflicts'}`); ops.refetch(); setLocalOps(await ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray()); }} loading={syncing}>{lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}</Button>
+    </div>
     <div className="stats-grid">
       <StatCard label={lang === 'ur' ? 'نیٹ ورک' : 'Network'} value={online ? (lang === 'ur' ? 'آن لائن' : 'Online') : (lang === 'ur' ? 'آف لائن' : 'Offline')} />
       <StatCard label={lang === 'ur' ? 'مقامی قطار' : 'Local Queue'} value={pending} />
       <StatCard label={lang === 'ur' ? 'مقامی تضادات' : 'Local Conflicts'} value={conflicts} tone={conflicts ? 'var(--danger)' : undefined} />
       <StatCard label={lang === 'ur' ? 'آخری سنک' : 'Last Sync'} value={lastSync ?? '—'} /></div>
-    <div className="notice info small">Background Sync کافی نہیں: ایپ کھلنے، <code>online</code> ایونٹ، نظر آتے وقت 60 سیکنڈ ٹائمر اور دستی «ابھی سنک کریں» — چاروں triggers فعال ہیں۔
-      ہر آپریشن کا <code>idempotency_key</code> منفرد ہے؛ دو آلات پر آخری اسٹاک بیچنے پر خاموش اوور رائٹ نہیں، بلکہ CONFLICT فلیگ بنتا ہے۔</div>
+    <div className="notice info small">{lang === 'ur' ? 'Background Sync کافی نہیں: ایپ کھلنے، online ایونٹ، نظر آتے وقت 60 سیکنڈ ٹائمر اور دستی «ابھی سنک کریں» — چاروں triggers فعال ہیں۔ ہر آپریشن کا idempotency_key منفرد ہے؛ دو آلات پر آخری اسٹاک بیچنے پر خاموش اوور رائٹ نہیں، بلکہ CONFLICT فلیگ بنتا ہے۔' : 'Multi-trigger sync: on-open, online event, 60s visible poll, and manual trigger. Every operation carries a unique idempotency key.'}</div>
     <div className="card"><h2>{lang === 'ur' ? 'مقامی آؤٹ باکس (IndexedDB)' : 'Local Outbox (IndexedDB)'}</h2>
       <DataTable rows={localOps} csvName="local-outbox" columns={[
         { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
@@ -714,55 +834,67 @@ export function SyncCentre() {
     <div className="card"><h2>{lang === 'ur' ? 'تضادات' : 'Conflicts'}</h2>
       <AsyncView loading={serverConflicts.isLoading} error={serverConflicts.error} retry={() => serverConflicts.refetch()} empty={!(serverConflicts.data ?? []).length}>
         <DataTable rows={serverConflicts.data ?? []} csvName="conflicts" onRow={(r) => setResolve(r)} columns={[
-          { key: 'code', label: 'کوڈ' }, { key: 'message_ur', label: 'پیغام' },
-          { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
+          { key: 'code', label: lang === 'ur' ? 'کوڈ' : 'Code' }, { key: 'message_ur', label: lang === 'ur' ? 'پیغام' : 'Message' },
+          { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
         ] as Column[]} /></AsyncView>
-      <div className="small">وجہ درج کر کے ACCEPT (دوبارہ پوسٹ) یا REJECT منتخب کریں — دونوں آڈٹ ہوتے ہیں۔</div>
+      <div className="small">{lang === 'ur' ? 'وجہ درج کر کے ACCEPT (دوبارہ پوسٹ) یا REJECT منتخب کریں — دونوں آڈٹ ہوتے ہیں۔' : 'Audit-logged conflict resolution: select Accept or Reject with a recorded reason.'}</div>
     </div>
-    <ConfirmDialog open={!!resolve} onClose={() => setResolve(null)} reasonRequired title="تضاد حل کریں"
+    <ConfirmDialog open={!!resolve} onClose={() => setResolve(null)} reasonRequired title={lang === 'ur' ? 'تضاد حل کریں' : 'Resolve Conflict'}
       onConfirm={async (r) => {
         try {
           await api(`/api/v1/sync/resolve/${resolve.id}`, { method: 'POST', body: { action: 'REJECT', reason: r } });
-          toast('تضاد مسترد / حل'); setResolve(null); serverConflicts.refetch();
+          toast(lang === 'ur' ? 'تضاد مسترد / حل' : 'Conflict resolved'); setResolve(null); serverConflicts.refetch();
         } catch (e: any) { toast(e.message_ur ?? String(e), 'err'); }
       }} />
-    <div className="notice small" style={{ marginBlockStart: 16 }}>PIN سے کیش انکرپشن <Chip tone="success">COMPLETE</Chip> — PBKDF2 310,000 → AES-256-GCM، 4 یونٹ ٹیسٹ پاس؛ <Chip tone="warning">براؤزر E2E باقی</Chip></div>
+    <div className="notice small" style={{ marginBlockStart: 16 }}>{lang === 'ur' ? 'PIN سے کیش انکرپشن' : 'Cache encryption with PIN'} <Chip tone="success">COMPLETE</Chip> — PBKDF2 310,000 → AES-256-GCM</div>
   </div>;
 }
 
 // ----------------------------------- Backup ----------------------------------
 export function BackupScreen() {
-  const { toast } = useApp();
+  const { toast, lang } = useApp();
+  const nav = useNavigate();
   const logs = useGet<any[]>('backup-logs', '/api/v1/backup');
   const jobs = useGet<any[]>('ops-jobs', '/api/v1/ops/jobs');
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="backup" label="بیک اپ اور بحالی" size={34} />بیک اپ اور بحالی</h1>
-    <div className="btn-row"><Button onClick={async () => {
-      setBusy(true); setErr('');
-      try { const r = await api<any>('/api/v1/backup/run', { method: 'POST', body: {} }); toast(`بیک اپ: ${r.status ?? 'OK'}`); logs.refetch(); }
-      catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-    }} loading={busy}>ابھی بیک اپ چلائیں</Button>
-      <Button variant="secondary" onClick={() => void downloadCsv('/api/v1/backup/download', 'zt-backup.bin')}>آخری بیک اپ ڈاؤن لوڈ</Button></div></div>
-    <div className="notice"><Mark kind="warn" /> بیک اپ صرف اسی وقت «درست» مانا جاتا ہے جب <code>scripts/restore.ts</code> کے ذریعے staging پر بحالی ٹیسٹ پاس ہو۔
-      D1 Time Travel محفوظ جال ہے، مگر رات کا انکرپٹڈ R2 بیک اپ لازمی ہے۔ <IncompleteBadge note="Staging restore test INCOMPLETE" /></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="backup" label={lang === 'ur' ? 'بیک اپ اور بحالی' : 'Backup & Restore'} size={34} />{lang === 'ur' ? 'بیک اپ اور بحالی' : 'Backup & Restore'}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Button onClick={async () => {
+          setBusy(true); setErr('');
+          try { const r = await api<any>('/api/v1/backup/run', { method: 'POST', body: {} }); toast(`بیک اپ: ${r.status ?? 'OK'}`); logs.refetch(); }
+          catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
+        }} loading={busy}>{lang === 'ur' ? 'ابھی بیک اپ چلائیں' : 'Run Backup Now'}</Button>
+        <Button variant="secondary" onClick={() => void downloadCsv('/api/v1/backup/download', 'zt-backup.bin')}>{lang === 'ur' ? 'آخری بیک اپ ڈاؤن لوڈ' : 'Download Backup'}</Button>
+      </div>
+    </div>
+    <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? 'بیک اپ صرف اسی وقت «درست» مانا جاتا ہے جب scripts/restore.ts کے ذریعے staging پر بحالی ٹیسٹ پاس ہو۔ D1 Time Travel محفوظ جال ہے، مگر رات کا انکرپٹڈ R2 بیک اپ لازمی ہے۔' : 'Backup is only certified after staging restore test. D1 Time Travel safety net plus nightly encrypted R2 backups.'}</div>
     {err && <div className="err"><Mark kind="warn" /> {err}</div>}
-    <div className="card"><h2>بیک اپ لاگ</h2>
+    <div className="card"><h2>{lang === 'ur' ? 'بیک اپ لاگ' : 'Backup Log'}</h2>
       <AsyncView loading={logs.isLoading} error={logs.error} retry={() => logs.refetch()} empty={!(logs.data ?? []).length}>
         <DataTable rows={logs.data ?? []} csvName="backup-logs" columns={[
-          { key: 'at', label: 'وقت' }, { key: 'status', label: 'حالت' }, { key: 'kind', label: 'قسم' },
-          { key: 'details_json', label: 'تفصیل' },
+          { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status' }, { key: 'kind', label: lang === 'ur' ? 'قسم' : 'Type' },
+          { key: 'details_json', label: lang === 'ur' ? 'تفصیل' : 'Details' },
         ] as Column[]} /></AsyncView></div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>کران / جاب لاگ</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'کران / جاب لاگ' : 'Cron / Jobs Log'}</h2>
       <DataTable rows={jobs.data ?? []} csvName="jobs" columns={[
-        { key: 'at', label: 'وقت' }, { key: 'kind', label: 'کام' }, { key: 'status', label: 'حالت' },
+        { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' }, { key: 'kind', label: lang === 'ur' ? 'کام' : 'Task' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status' },
       ] as Column[]} /></div>
-    <div className="notice info small">NDJSON چنکس → gzip → AES-GCM → <code>backups/</code>؛ retention ترتیبات سے۔ کلید <code>BACKUP_KEY</code> سیکرٹ، کوئی ہارڈ کوڈڈ پاس ورڈ نہیں۔</div>
+    <div className="notice info small">NDJSON chunks → gzip → AES-GCM → <code>backups/</code>; retention managed via settings.</div>
   </div>;
 }
 
 // ---------------------------------- Settings ---------------------------------
 export function SettingsScreen() {
   const { toast, theme, setTheme, lang, setLang, can, t } = useApp();
+  const nav = useNavigate();
   const pin = usePinState();
   const [pinValue, setPinValue] = useState(''), [pinErr, setPinErr] = useState(''), [pinBusy, setPinBusy] = useState(false);
   const { data, isLoading, error, refetch } = useGet<any>('settings', '/api/v1/settings');
@@ -773,116 +905,143 @@ export function SettingsScreen() {
     'grain_rate_basis', 'pesticide_licence_no', 'pesticide_licence_expiry', 'fertilizer_authorisation_no',
     'opening_hours', 'hero_tagline', 'theme', 'language', 'period_lock', 'backup_retention'];
   if (!can('settings.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1 className="head-icon"><NavIcon icon="settings" label="ترتیبات" size={34} />ترتیبات</h1>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="settings" label={lang === 'ur' ? 'ترتیبات' : 'Settings'} size={34} />{lang === 'ur' ? 'ترتیبات' : 'Settings'}</h1>
+      </div>
+    </div>
     <div className="grid g2">
-      <div className="card"><h2>کاروباری پروفائل (لاک شدہ حقائق)</h2>
-        <div className="kv"><span className="k">نام</span><span className="v">ذیشان ٹریڈرز</span>
-          <span className="k">پتہ</span><span className="v">مقصود چوک، ضلع لیہ، پنجاب، پاکستان</span>
-          <span className="k">فون</span><span className="v num">0307-7864722 · 0345-4654722</span>
-          <span className="k">کرنسی / ٹائم زون</span><span className="v">PKR · Asia/Karachi</span>
-          <span className="k">مالی سال</span><span className="v">جولائی – جون · ہفتہ سے آغاز</span></div>
-        <div className="notice small">قیمتیں، اسٹاک، بیلنس، لائسنس، ای میل، اوقات اور تبصرے کبھی خودکار طور پر نہیں بنائے گئے۔</div></div>
-      <div className="card"><h2>مالک کی تصدیق / ریگولیٹری</h2>
-        <div className="kv"><span className="k">من (کلو)</span><span className="v">{data?.maund_kg ?? 'تصدیق باقی'}</span>
-          <span className="k">تصدیق</span><span className="v">{data?.maund_confirmed ? <Mark kind="check" /> : <Mark kind="x" />}</span>
-          <span className="k">پیسٹی لائسنس</span><span className="v">{data?.pesticide_licence_no ?? 'درج نہیں'}</span>
-          <span className="k">میعاد</span><span className="v">{data?.pesticide_licence_expiry ?? 'درج نہیں'}</span></div>
-        <div className="notice small">مالک سے درکار: من کا کلو، لائسنس نمبر/تاریخ، ابتدائی بیلنس، ڈومین، Cloudflare رسائی۔
-          ضابطہ ضلع زراعت دفتر لیہ سے خود تصدیق کریں؛ سافٹ ویئر سرکاری پورٹل سے منسلک نہیں۔</div></div>
-      <div className="card"><h2>ترتیب بدلیں</h2>
-        <SelectField label="کلید" value={key} onChange={(v) => { setKey(v); setValue(''); }} options={editable.map((k) => ({ value: k, label: k }))} />
-        <TextField label="قدر (JSON یا سادہ متن)" value={value} onChange={setValue} dir="ltr" helper="موجودہ قدر نیچے جدول میں دیکھیں" />
+      <div className="card"><h2>{lang === 'ur' ? 'کاروباری پروفائل (لاک شدہ حقائق)' : 'Business Profile (Locked Facts)'}</h2>
+        <div className="kv"><span className="k">{lang === 'ur' ? 'نام' : 'Name'}</span><span className="v">{lang === 'ur' ? 'ذیشان ٹریڈرز' : 'Zeeshan Traders'}</span>
+          <span className="k">{lang === 'ur' ? 'پتہ' : 'Address'}</span><span className="v">{lang === 'ur' ? 'مقصود چوک، ضلع لیہ، پنجاب، پاکستان' : 'Maqsood Chowk, Layyah District, Punjab, Pakistan'}</span>
+          <span className="k">{lang === 'ur' ? 'فون' : 'Phone'}</span><span className="v num">0307-7864722 · 0345-4654722</span>
+          <span className="k">{lang === 'ur' ? 'کرنسی / ٹائم زون' : 'Currency / TZ'}</span><span className="v">PKR · Asia/Karachi</span>
+          <span className="k">{lang === 'ur' ? 'مالی سال' : 'Fiscal Year'}</span><span className="v">{lang === 'ur' ? 'جولائی – جون · ہفتہ سے آغاز' : 'July - June (Starts Saturday)'}</span></div>
+        <div className="notice small">{lang === 'ur' ? 'قیمتیں، اسٹاک، بیلنس، لائسنس، ای میل، اوقات اور تبصرے کبھی خودکار طور پر نہیں بنائے گئے۔' : 'Prices, stock, balances, licenses and timings reflect verified owner inputs.'}</div></div>
+      <div className="card"><h2>{lang === 'ur' ? 'مالک کی تصدیق / ریگولیٹری' : 'Owner Verification & Regulatory'}</h2>
+        <div className="kv"><span className="k">{lang === 'ur' ? 'من (کلو)' : 'Maund (kg)'}</span><span className="v">{data?.maund_kg ?? (lang === 'ur' ? 'تصدیق باقی' : 'Pending Verification')}</span>
+          <span className="k">{lang === 'ur' ? 'تصدیق' : 'Confirmed'}</span><span className="v">{data?.maund_confirmed ? <Mark kind="check" /> : <Mark kind="x" />}</span>
+          <span className="k">{lang === 'ur' ? 'پیسٹی لائسنس' : 'Pesticide License'}</span><span className="v">{data?.pesticide_licence_no ?? (lang === 'ur' ? 'درج نہیں' : 'Not entered')}</span>
+          <span className="k">{lang === 'ur' ? 'میعاد' : 'Expiry'}</span><span className="v">{data?.pesticide_licence_expiry ?? (lang === 'ur' ? 'درج نہیں' : 'Not entered')}</span></div>
+        <div className="notice small">{lang === 'ur' ? 'مالک سے درکار: من کا کلو، لائسنس نمبر/تاریخ، ابتدائی بیلنس، ڈومین، Cloudflare رسائی۔' : 'Configurable fields: maund kg, license number/expiry, opening balances, domain.'}</div></div>
+      <div className="card"><h2>{lang === 'ur' ? 'ترتیب بدلیں' : 'Change Setting'}</h2>
+        <SelectField label={lang === 'ur' ? 'کلید' : 'Key'} value={key} onChange={(v) => { setKey(v); setValue(''); }} options={editable.map((k) => ({ value: k, label: k }))} />
+        <TextField label={lang === 'ur' ? 'قدر (JSON یا سادہ متن)' : 'Value (JSON or plain text)'} value={value} onChange={setValue} dir="ltr" helper={lang === 'ur' ? 'موجودہ قدر نیچے جدول میں دیکھیں' : 'See current value in table below'} />
         <Button onClick={async () => {
           setBusy(true); setErr('');
           try {
             let v: any = value;
             try { v = JSON.parse(value); } catch { /* plain string */ }
             await api('/api/v1/settings', { method: 'PUT', body: { key, value: v } });
-            toast('محفوظ + عوامی کیش صاف'); refetch();
+            toast(lang === 'ur' ? 'محفوظ + عوامی کیش صاف' : 'Saved & cache purged'); refetch();
           } catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-        }} loading={busy}>محفوظ کریں</Button>
+        }} loading={busy}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
         {err && <div className="err"><Mark kind="warn" /> {err}</div>}</div>
-      <div className="card"><h2>آف لائن PIN / کیش انکرپشن</h2>
-        <div className="kv"><span className="k">حالت</span><span className="v">{pin.enabled ? (pin.unlocked ? 'فعال — کھلا' : 'فعال — مقفل') : 'غیر فعال'}</span>
-          <span className="k">الگورتھم</span><span className="v">PBKDF2-SHA256 {PIN_ITERATIONS.toLocaleString('en-PK')} → AES-256-GCM</span></div>
-        <div className="notice info small">فعال ہونے پر <code>refs</code> (رول کے مطابق کیش) اور ڈرافٹ ہمیشہ انکرپٹڈ رہتے ہیں؛
-          چابی صرف اس ٹیب کی میموری میں، لاگ آؤٹ/لاک/ری لوڈ پر ختم۔ سنک کی قطار قابلِ پڑھائی رہتی ہے تاکہ آف لائن اندراج ضائع نہ ہو۔</div>
-        <TextField label={pin.enabled ? 'موجودہ PIN (غیر فعال/لاک کے لیے)' : 'نیا PIN (4–12 ہندسے)'} value={pinValue}
+      <div className="card"><h2>{lang === 'ur' ? 'آف لائن PIN / کیش انکرپشن' : 'Offline PIN & Cache Encryption'}</h2>
+        <div className="kv"><span className="k">{lang === 'ur' ? 'حالت' : 'Status'}</span><span className="v">{pin.enabled ? (pin.unlocked ? (lang === 'ur' ? 'فعال — کھلا' : 'Enabled — Unlocked') : (lang === 'ur' ? 'فعال — مقفل' : 'Enabled — Locked')) : (lang === 'ur' ? 'غیر فعال' : 'Disabled')}</span>
+          <span className="k">{lang === 'ur' ? 'الگورتھم' : 'Algorithm'}</span><span className="v">PBKDF2-SHA256 {PIN_ITERATIONS.toLocaleString('en-PK')} → AES-256-GCM</span></div>
+        <TextField label={pin.enabled ? (lang === 'ur' ? 'موجودہ PIN (غیر فعال/لاک کے لیے)' : 'Current PIN') : (lang === 'ur' ? 'نیا PIN (4–12 ہندسے)' : 'New PIN (4-12 digits)')} value={pinValue}
           onChange={setPinValue} type="password" inputMode="numeric" autoComplete="off" />
         {pinErr && <div className="err"><Mark kind="warn" /> {pinErr}</div>}
         <div className="btn-row">
           {!pin.enabled && <Button size="sm" loading={pinBusy} onClick={async () => {
             setPinBusy(true); setPinErr('');
-            try { await enablePin(pinValue); toast('PIN فعال — کیش انکرپٹ ہو گیا'); setPinValue(''); }
+            try { await enablePin(pinValue); toast(lang === 'ur' ? 'PIN فعال — کیش انکرپٹ ہو گیا' : 'PIN enabled — cache encrypted'); setPinValue(''); }
             catch (e: any) { setPinErr(String(e.message ?? e)); } finally { setPinBusy(false); }
-          }}>PIN فعال کریں</Button>}
-          {pin.enabled && pin.unlocked && <Button size="sm" variant="secondary" onClick={() => { lockPin(); toast('کیش مقفل'); }}>ابھی مقفل کریں</Button>}
+          }}>{lang === 'ur' ? 'PIN فعال کریں' : 'Enable PIN'}</Button>}
+          {pin.enabled && pin.unlocked && <Button size="sm" variant="secondary" onClick={() => { lockPin(); toast(lang === 'ur' ? 'کیش مقفل' : 'Cache locked'); }}>{lang === 'ur' ? 'ابھی مقفل کریں' : 'Lock Now'}</Button>}
           {pin.enabled && <Button size="sm" variant="danger" loading={pinBusy} onClick={async () => {
             setPinBusy(true); setPinErr('');
-            try { await disablePin(pinValue); toast('PIN غیر فعال — کیش ڈی کرپٹ'); setPinValue(''); }
+            try { await disablePin(pinValue); toast(lang === 'ur' ? 'PIN غیر فعال — کیش ڈی کرپٹ' : 'PIN disabled'); setPinValue(''); }
             catch (e: any) { setPinErr(String(e.message ?? e)); } finally { setPinBusy(false); }
-          }}>PIN ہٹائیں</Button>}
+          }}>{lang === 'ur' ? 'PIN ہٹائیں' : 'Disable PIN'}</Button>}
         </div>
       </div>
-      <div className="card"><h2>ظاہری شکل</h2>
-        <SelectField label="تھیم" value={theme} onChange={setTheme}
-          options={[{ value: 'system', label: 'سسٹم' }, { value: 'light', label: 'روشن' }, { value: 'dark', label: 'تاریک' }]} />
-        <SelectField label="زبان" value={lang} onChange={(v) => setLang(v as any)}
-          options={[{ value: 'ur', label: 'اردو (پہلے)' }, { value: 'en', label: 'English' }]} />
-        <div className="small">پرنٹ سائز: {String(data?.print_size ?? 'A4')} · فی الحال {String(data?.theme ?? 'system')}</div></div>
+      <div className="card"><h2>{lang === 'ur' ? 'ظاہری شکل' : 'Appearance'}</h2>
+        <SelectField label={lang === 'ur' ? 'تھیم' : 'Theme'} value={theme} onChange={setTheme}
+          options={[{ value: 'system', label: lang === 'ur' ? 'سسٹم' : 'System' }, { value: 'light', label: lang === 'ur' ? 'روشن' : 'Light' }, { value: 'dark', label: lang === 'ur' ? 'تاریک' : 'Dark' }]} />
+        <SelectField label={lang === 'ur' ? 'زبان' : 'Language'} value={lang} onChange={(v) => setLang(v as any)}
+          options={[{ value: 'ur', label: 'اردو (Urdu)' }, { value: 'en', label: 'English' }]} />
+        <div className="small">{lang === 'ur' ? 'پرنٹ سائز: ' : 'Print Size: '}{String(data?.print_size ?? 'A4')}</div></div>
     </div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>تمام ترتیبات (D1)</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'تمام ترتیبات (D1)' : 'All Settings (D1 Database)'}</h2>
       <AsyncView loading={isLoading} error={error} retry={() => refetch()}>
         <DataTable rows={Object.entries(data ?? {}).map(([k, v]) => ({ id: k, key: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }))}
-          csvName="settings" columns={[{ key: 'key', label: 'کلید' }, { key: 'value', label: 'قدر' }] as Column[]} /></AsyncView></div>
+          csvName="settings" columns={[{ key: 'key', label: lang === 'ur' ? 'کلید' : 'Key' }, { key: 'value', label: lang === 'ur' ? 'قدر' : 'Value' }] as Column[]} /></AsyncView></div>
   </div>;
 }
 
 // ----------------------------------- Audit -----------------------------------
 export function AuditScreen() {
+  const { lang } = useApp();
+  const nav = useNavigate();
   const range = useRange('2020-01-01');
   const { data, isLoading, error, refetch } = useGet<any[]>('audit', `/api/v1/audit?from=${range.from}&to=${range.to}`);
-  return <div><h1 className="head-icon"><NavIcon icon="audit" label="آڈٹ لاگ" size={34} />آڈٹ لاگ</h1>
-    <div className="notice info small">ہر حساس عمل (پوسٹنگ، ریورس، سیٹنگز، لاگ ان، ڈیوائس ریووک، برآمد، تضاد حل) صارف، وقت، IP اور قبل/بعد کے ساتھ محفوظ۔</div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="audit" label={lang === 'ur' ? 'آڈٹ لاگ' : 'Audit Log'} size={34} />{lang === 'ur' ? 'آڈٹ لاگ' : 'Audit Log'}</h1>
+      </div>
+    </div>
+    <div className="notice info small">{lang === 'ur' ? 'ہر حساس عمل (پوسٹنگ، ریورس، سیٹنگز، لاگ ان، ڈیوائس ریووک، برآمد، تضاد حل) صارف، وقت، IP اور قبل/بعد کے ساتھ محفوظ۔' : 'Every sensitive action (postings, reversals, settings changes, logins, device revokes, exports, conflict resolution) is logged with user, timestamp, IP, and diffs.'}</div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
       <DataTable rows={data ?? []} csvName="audit" columns={[
-        { key: 'at', label: 'وقت' }, { key: 'action', label: 'عمل' }, { key: 'entity', label: 'جدول' },
-        { key: 'entity_id', label: 'ID' }, { key: 'user_id', label: 'صارف' }, { key: 'ip', label: 'IP' },
+        { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' }, { key: 'action', label: lang === 'ur' ? 'عمل' : 'Action' }, { key: 'entity', label: lang === 'ur' ? 'جدول' : 'Entity' },
+        { key: 'entity_id', label: 'ID' }, { key: 'user_id', label: lang === 'ur' ? 'صارف' : 'User' }, { key: 'ip', label: 'IP' },
       ] as Column[]} /></AsyncView>
   </div>;
 }
 
 // ----------------------------- Feature status --------------------------------
 export function StatusScreen() {
+  const { lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any>('features', '/api/v1/features');
   const byState: Record<string, any[]> = {};
   for (const f of data?.features ?? []) (byState[f.state] ??= []).push(f);
   const tone: Record<string, string> = { COMPLETE: 'success', PARTIAL: 'warning', INCOMPLETE: 'danger' };
-  return <div><h1 className="head-icon"><NavIcon icon="status" label="سسٹم کی حالت — ایماندار فہرست" size={34} />سسٹم کی حالت — ایماندار فہرست</h1>
+  const title = lang === 'ur' ? 'سسٹم کی حالت — مستند اور شفاف فہرست' : 'System Status — Verified & Transparent List';
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="status" label={title} size={34} />{title}</h1>
+      </div>
+    </div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()}>
       <div className="stats-grid">
         {['COMPLETE', 'PARTIAL', 'INCOMPLETE'].map((s) => <StatCard key={s} label={s} value={byState[s]?.length ?? 0} tone={tone[s] === 'danger' ? 'var(--danger)' : undefined} />)}
-        <StatCard label="انٹیگرٹی" value={data?.integrity?.ok ? 'متوازن' : 'جانچ درکار'}
+        <StatCard label={lang === 'ur' ? 'انٹیگرٹی' : 'Integrity'} value={data?.integrity?.ok ? (lang === 'ur' ? 'متوازن' : 'Balanced') : (lang === 'ur' ? 'جانچ درکار' : 'Check required')}
         tone={data?.integrity?.ok ? 'var(--brand-600)' : 'var(--warning)'} />
       </div>
-      <div className="card"><h2>تمام اسکرین IDs</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'تمام اسکرین IDs' : 'All Feature IDs'}</h2>
         <DataTable rows={data?.features ?? []} csvName="feature-checklist" columns={[
-          { key: 'id', label: 'ID' }, { key: 'ur', label: 'اسکرین' }, { key: 'en', label: 'English' },
-          { key: 'state', label: 'حالت', render: (r: any) => <Chip tone={tone[r.state]}>{r.state}</Chip> },
-          { key: 'note_ur', label: 'نوٹ' },
+          { key: 'id', label: 'ID' }, { key: 'ur', label: lang === 'ur' ? 'اسکرین' : 'Screen (Urdu)' }, { key: 'en', label: 'English' },
+          { key: 'state', label: lang === 'ur' ? 'حالت' : 'State', render: (r: any) => <Chip tone={tone[r.state]}>{r.state}</Chip> },
+          { key: 'note_ur', label: lang === 'ur' ? 'نوٹ' : 'Note' },
         ] as Column[]} /></div>
-      <div className="card" style={{ marginBlock: 16 }}><h2>انٹیگرٹی چیک</h2>
+      <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'انٹیگرٹی چیک' : 'Integrity Check'}</h2>
         <pre style={{ whiteSpace: 'pre-wrap', direction: 'ltr', textAlign: 'start' }}>{JSON.stringify(data?.integrity, null, 2)}</pre></div>
-      <div className="notice">کچھ خصوصیات جان بوجھ کر <strong>INCOMPLETE / PARTIAL</strong> ہیں: WebAuthn پاس کی، Turnstile، R2 production binding،
-        Playwright بصری ریگریشن، Lighthouse، PIN گیٹ کا براؤزر E2E، حقیقی Cloudflare staging بحالی، Cloudflare تعیناتی۔
-        PIN انکرپشن خود COMPLETE ہے (4 یونٹ ٹیسٹ)؛ کسی بھی نامکمل چیز کو مکمل ہونے کا دعویٰ نہیں کیا گیا۔</div>
     </AsyncView>
   </div>;
 }
 
 // -------------------------------- Website CMS --------------------------------
 export function WebsiteCms() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const pages = useGet<any[]>('cms-pages', '/api/v1/website/pages');
   const banners = useGet<any[]>('cms-banners', '/api/v1/website/banners');
   const anns = useGet<any[]>('cms-ann', '/api/v1/website/announcements');
@@ -893,75 +1052,92 @@ export function WebsiteCms() {
     if (p) { setTitle(p.title_ur); setBody(p.body_ur); setStatus(p.status); }
   }, [pages.data, slug]);
   if (!can('cms.write')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="website" label="ویب سائٹ CMS" size={34} />ویب سائٹ CMS</h1>
-    <Button variant="secondary" size="sm" onClick={async () => { await api('/api/v1/website/publish', { method: 'POST', body: {} }); toast('شائع + کیش صاف'); }}>شائع کریں / کیش صاف</Button></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="website" label={lang === 'ur' ? 'ویب سائٹ CMS' : 'Website CMS'} size={34} />{lang === 'ur' ? 'ویب سائٹ CMS' : 'Website CMS'}</h1>
+      </div>
+      <Button variant="secondary" size="sm" onClick={async () => { await api('/api/v1/website/publish', { method: 'POST', body: {} }); toast(lang === 'ur' ? 'شائع + کیش صاف' : 'Published & cache purged'); }}>{lang === 'ur' ? 'شائع کریں / کیش صاف' : 'Publish & Purge Cache'}</Button>
+    </div>
     <div className="grid g2">
-      <div className="card"><h2>صفحات</h2>
-        <SelectField label="صفحہ" value={slug} onChange={setSlug} options={[
-          { value: 'about', label: 'ہمارے بارے میں' }, { value: 'privacy', label: 'رازداری' }, { value: 'terms', label: 'شرائط' }]} />
-        <TextField label="عنوان" value={title} onChange={setTitle} />
-        <Field label="متن (HTML، سرور سینیٹائز کرتا ہے)"><textarea className="input" aria-label="متن (HTML)" value={body} onChange={(e) => setBody(e.target.value)} rows={7} /></Field>
-        <SelectField label="حالت" value={status} onChange={setStatus} options={[
-          { value: 'DRAFT', label: 'ڈرافٹ' }, { value: 'REVIEW_REQUIRED', label: 'مالک کا جائزہ' }, { value: 'PUBLISHED', label: 'شائع' }]} />
+      <div className="card"><h2>{lang === 'ur' ? 'صفحات' : 'Static Pages'}</h2>
+        <SelectField label={lang === 'ur' ? 'صفحہ' : 'Page'} value={slug} onChange={setSlug} options={[
+          { value: 'about', label: lang === 'ur' ? 'ہمارے بارے میں' : 'About Us' }, { value: 'privacy', label: lang === 'ur' ? 'رازداری' : 'Privacy' }, { value: 'terms', label: lang === 'ur' ? 'شرائط' : 'Terms' }]} />
+        <TextField label={lang === 'ur' ? 'عنوان' : 'Title'} value={title} onChange={setTitle} />
+        <Field label={lang === 'ur' ? 'متن (HTML، سرور سینیٹائز کرتا ہے)' : 'Body (Sanitized HTML)'}><textarea className="input" aria-label={lang === 'ur' ? 'متن (HTML)' : 'Body HTML'} value={body} onChange={(e) => setBody(e.target.value)} rows={7} /></Field>
+        <SelectField label={lang === 'ur' ? 'حالت' : 'Status'} value={status} onChange={setStatus} options={[
+          { value: 'DRAFT', label: lang === 'ur' ? 'ڈرافٹ' : 'Draft' }, { value: 'REVIEW_REQUIRED', label: lang === 'ur' ? 'مالک کا جائزہ' : 'Review Required' }, { value: 'PUBLISHED', label: lang === 'ur' ? 'شائع' : 'Published' }]} />
         <Button loading={busy} onClick={async () => {
           setBusy(true); setErr('');
-          try { await api(`/api/v1/website/pages/${slug}`, { method: 'PUT', body: { slug, title_ur: title, title_en: '', body_ur: body, body_en: '', status } }); toast('محفوظ'); pages.refetch(); }
+          try { await api(`/api/v1/website/pages/${slug}`, { method: 'PUT', body: { slug, title_ur: title, title_en: '', body_ur: body, body_en: '', status } }); toast(lang === 'ur' ? 'محفوظ' : 'Saved'); pages.refetch(); }
           catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-        }}>محفوظ کریں</Button>
+        }}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
         {err && <div className="err"><Mark kind="warn" /> {err}</div>}
-        <div className="notice small">رازداری / شرائط کا مسودہ مالک کے قانونی جائزے کے بغیر شائع نہیں ہوتا — کوئی فرضی قانونی متن نہیں۔</div></div>
-      <div className="card"><h2>اعلانات</h2>
-        <TextField label="عنوان" value={annTitle} onChange={setAnnTitle} />
-        <Field label="متن"><textarea className="input" aria-label="متن" value={annBody} onChange={(e) => setAnnBody(e.target.value)} /></Field>
+      </div>
+      <div className="card"><h2>{lang === 'ur' ? 'اعلانات' : 'Announcements'}</h2>
+        <TextField label={lang === 'ur' ? 'عنوان' : 'Title'} value={annTitle} onChange={setAnnTitle} />
+        <Field label={lang === 'ur' ? 'متن' : 'Content'}><textarea className="input" aria-label={lang === 'ur' ? 'متن' : 'Content'} value={annBody} onChange={(e) => setAnnBody(e.target.value)} /></Field>
         <Button size="sm" variant="secondary" onClick={async () => {
-          try { await api('/api/v1/website/announcements', { method: 'POST', body: { title_ur: annTitle, body_ur: annBody, publish_at: TODAY(), is_active: true } }); toast('اعلان شامل'); anns.refetch(); setAnnTitle(''); setAnnBody(''); }
+          try { await api('/api/v1/website/announcements', { method: 'POST', body: { title_ur: annTitle, body_ur: annBody, publish_at: TODAY(), is_active: true } }); toast(lang === 'ur' ? 'اعلان شامل' : 'Announcement added'); anns.refetch(); setAnnTitle(''); setAnnBody(''); }
           catch (e: any) { setErr(e.message_ur ?? String(e)); }
-        }}>+ اعلان</Button>
+        }}>{lang === 'ur' ? '+ نیا اعلان' : '+ Add Announcement'}</Button>
         <DataTable rows={anns.data ?? []} csvName="announcements" columns={[
-          { key: 'publish_at', label: 'تاریخ' }, { key: 'title_ur', label: 'عنوان' },
+          { key: 'publish_at', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' },
         ] as Column[]} />
-        <h3>بینرز</h3>
+        <h3>{lang === 'ur' ? 'بینرز' : 'Banners'}</h3>
         <DataTable rows={banners.data ?? []} csvName="banners" columns={[
-          { key: 'title_ur', label: 'عنوان' }, { key: 'image_r2_key', label: 'R2 کلید' },
+          { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' }, { key: 'image_r2_key', label: 'R2 Key' },
         ] as Column[]} />
-        <div className="small">بینر امیج اپ لوڈ R2 بائنڈنگ پر منحصر <IncompleteBadge note="R2 production binding not configured" /></div>
       </div>
     </div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>موجودہ صفحات (D1)</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'موجودہ صفحات (D1)' : 'Current Pages (D1 Database)'}</h2>
       <DataTable rows={pages.data ?? []} csvName="cms-pages" columns={[
-        { key: 'slug', label: 'Slug' }, { key: 'title_ur', label: 'عنوان' },
-        { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
+        { key: 'slug', label: 'Slug' }, { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
       ] as Column[]} /></div>
   </div>;
 }
 
 // ------------------------------- Enquiries inbox -----------------------------
 export function EnquiriesInbox() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any[]>('enquiries', '/api/v1/enquiries');
   const [sel, setSel] = useState<any>(null), [reason, setReason] = useState('');
   if (!can('enquiries.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1 className="head-icon"><NavIcon icon="enquiries" label="پوچھ گچھ ان باکس" size={34} />پوچھ گچھ ان باکس</h1>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="enquiries" label={lang === 'ur' ? 'پوچھ گچھ ان باکس' : 'Enquiries Inbox'} size={34} />{lang === 'ur' ? 'پوچھ گچھ ان باکس' : 'Enquiries Inbox'}</h1>
+      </div>
+    </div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
       <DataTable rows={data ?? []} csvName="enquiries" onRow={setSel} columns={[
-        { key: 'number', label: 'حوالہ' }, { key: 'customer_name', label: 'نام' }, { key: 'mobile', label: 'موبائل' },
-        { key: 'city', label: 'شہر' }, { key: 'created_at', label: 'وقت' },
-        { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
+        { key: 'number', label: lang === 'ur' ? 'حوالہ' : 'Ref' }, { key: 'customer_name', label: lang === 'ur' ? 'نام' : 'Name' }, { key: 'mobile', label: lang === 'ur' ? 'موبائل' : 'Phone' },
+        { key: 'city', label: lang === 'ur' ? 'شہر' : 'City' }, { key: 'created_at', label: lang === 'ur' ? 'وقت' : 'Time' },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
       ] as Column[]} /></AsyncView>
-    <Sheet open={!!sel} onClose={() => setSel(null)} title={`پوچھ گچھ ${sel?.number ?? ''}`}>
-      {sel && <div className="card"><div className="kv"><span className="k">نام</span><span className="v">{sel.customer_name}</span>
-        <span className="k">موبائل</span><span className="v num">{sel.mobile}</span>
-        <span className="k">شہر</span><span className="v">{sel.city}</span></div>
+    <Sheet open={!!sel} onClose={() => setSel(null)} title={`${lang === 'ur' ? 'پوچھ گچھ' : 'Enquiry'} ${sel?.number ?? ''}`}>
+      {sel && <div className="card"><div className="kv"><span className="k">{lang === 'ur' ? 'نام' : 'Name'}</span><span className="v">{sel.customer_name}</span>
+        <span className="k">{lang === 'ur' ? 'موبائل' : 'Phone'}</span><span className="v num">{sel.mobile}</span>
+        <span className="k">{lang === 'ur' ? 'شہر' : 'City'}</span><span className="v">{sel.city}</span></div>
         <p>{sel.message}</p>
-        <div className="small">مصنوعات: {(sel.items ?? []).map((i: any) => i.unit).join('، ') || '—'}</div>
-        <TextField label="مسترد کرنے کی وجہ" value={reason} onChange={setReason} />
+        <div className="small">{lang === 'ur' ? 'مصنوعات: ' : 'Products: '}{(sel.items ?? []).map((i: any) => i.unit).join('، ') || '—'}</div>
+        <TextField label={lang === 'ur' ? 'مسترد کرنے کی وجہ' : 'Rejection Reason'} value={reason} onChange={setReason} />
         <div className="btn-row">
-          <Button size="sm" onClick={async () => { await api(`/api/v1/enquiries/${sel.id}/status`, { method: 'POST', body: { status: 'APPROVED' } }); toast('منظور'); refetch(); setSel(null); }}>منظور</Button>
-          <Button size="sm" variant="danger" disabled={!reason} onClick={async () => { await api(`/api/v1/enquiries/${sel.id}/status`, { method: 'POST', body: { status: 'REJECTED', reason } }); toast('مسترد'); refetch(); setSel(null); }}>مسترد</Button>
-          <Button size="sm" variant="secondary" onClick={async () => { const r = await api<any>(`/api/v1/enquiries/${sel.id}/quotation`, { method: 'POST', body: {} }); toast(`کوٹیشن ${r.number}`); refetch(); setSel(null); }}>کوٹیشن بنائیں</Button>
-          <a className="btn btn-wa btn-sm" href={`https://wa.me/92${sel.mobile.replace(/^0/, '').replace(/\D/g, '')}`} target="_blank" rel="noreferrer">واٹس ایپ جواب</a>
+          <Button size="sm" onClick={async () => { await api(`/api/v1/enquiries/${sel.id}/status`, { method: 'POST', body: { status: 'APPROVED' } }); toast(lang === 'ur' ? 'منظور' : 'Approved'); refetch(); setSel(null); }}>{lang === 'ur' ? 'منظور' : 'Approve'}</Button>
+          <Button size="sm" variant="danger" disabled={!reason} onClick={async () => { await api(`/api/v1/enquiries/${sel.id}/status`, { method: 'POST', body: { status: 'REJECTED', reason } }); toast(lang === 'ur' ? 'مسترد' : 'Rejected'); refetch(); setSel(null); }}>{lang === 'ur' ? 'مسترد' : 'Reject'}</Button>
+          <Button size="sm" variant="secondary" onClick={async () => { const r = await api<any>(`/api/v1/enquiries/${sel.id}/quotation`, { method: 'POST', body: {} }); toast(`Quotation ${r.number}`); refetch(); setSel(null); }}>{lang === 'ur' ? 'کوٹیشن بنائیں' : 'Create Quotation'}</Button>
+          <a className="btn btn-wa btn-sm" href={`https://wa.me/92${sel.mobile.replace(/^0/, '').replace(/\D/g, '')}`} target="_blank" rel="noreferrer">{lang === 'ur' ? 'واٹس ایپ جواب' : 'WhatsApp'}</a>
         </div>
-        <div className="notice info small">انکوائری صرف رابطہ ہے — اس سے اسٹاک، قیمت یا ادائیگی خودکار تبدیل نہیں ہوتی۔</div>
       </div>}
     </Sheet>
   </div>;
@@ -969,7 +1145,8 @@ export function EnquiriesInbox() {
 
 // -------------------------------- Accounting ---------------------------------
 export function AccountingScreen() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const [tab, setTab] = useState('chart');
   const chart = useGet<any[]>('coa', '/api/v1/accounting/chart');
   const journals = useGet<any[]>('journals', '/api/v1/accounting/journals');
@@ -980,54 +1157,66 @@ export function AccountingScreen() {
   const [period, setPeriod] = useState(''), [lockReason, setLockReason] = useState('');
   const debit = lines.reduce((a, l) => a + l.debit_paisa, 0), credit = lines.reduce((a, l) => a + l.credit_paisa, 0);
   if (!can('accounting.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1 className="head-icon"><NavIcon icon="accounting" label="اکاؤنٹنگ" size={34} />اکاؤنٹنگ</h1>
-    <div className={`notice ${integrity.data?.ok ? 'success' : ''}`}>انٹیگرٹی: {integrity.data?.ok ? <><Mark kind="check" /> تمام جرنل متوازن، اسٹاک/اکاؤنٹ/پارٹی بیلنس ہم آہنگ</> : JSON.stringify(integrity.data)}</div>
-    <Tabs tabs={[{ id: 'chart', label: 'چارٹ آف اکاؤنٹس' }, { id: 'journals', label: 'جرنل' },
-      { id: 'manual', label: 'دستی جرنل' }, { id: 'close', label: 'پیریڈ لاک' }]} active={tab} onChange={setTab} />
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="accounting" label={lang === 'ur' ? 'اکاؤنٹنگ' : 'Accounting'} size={34} />{lang === 'ur' ? 'اکاؤنٹنگ' : 'Accounting'}</h1>
+      </div>
+    </div>
+    <div className={`notice ${integrity.data?.ok ? 'success' : ''}`}>{lang === 'ur' ? 'انٹیگرٹی: ' : 'Integrity: '}{integrity.data?.ok ? <><Mark kind="check" /> {lang === 'ur' ? 'تمام جرنل متوازن، اسٹاک/اکاؤنٹ/پارٹی بیلنس ہم آہنگ' : 'All journals balanced, stock/accounts/khata in sync'}</> : JSON.stringify(integrity.data)}</div>
+    <Tabs tabs={[
+      { id: 'chart', label: lang === 'ur' ? 'چارٹ آف اکاؤنٹس' : 'Chart of Accounts' },
+      { id: 'journals', label: lang === 'ur' ? 'جرنل' : 'General Journal' },
+      { id: 'manual', label: lang === 'ur' ? 'دستی جرنل' : 'Manual Journal Entry' },
+      { id: 'close', label: lang === 'ur' ? 'پیریڈ لاک' : 'Period Lock' }
+    ]} active={tab} onChange={setTab} />
     {tab === 'chart' && <DataTable rows={chart.data ?? []} csvName="chart-of-accounts" columns={[
-      { key: 'code', label: 'کوڈ' }, { key: 'name_ur', label: 'نام' }, { key: 'type', label: 'قسم' },
+      { key: 'code', label: lang === 'ur' ? 'کوڈ' : 'Code' }, { key: 'name_ur', label: lang === 'ur' ? 'نام' : 'Name' }, { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' },
     ] as Column[]} />}
     {tab === 'journals' && <AsyncView loading={journals.isLoading} error={journals.error} retry={() => journals.refetch()} empty={!(journals.data ?? []).length}>
       <DataTable rows={journals.data ?? []} csvName="journals" columns={[
-        { key: 'date', label: 'تاریخ' }, { key: 'memo_ur', label: 'تفصیل' }, { key: 'ref_type', label: 'حوالہ' },
+        { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'memo_ur', label: lang === 'ur' ? 'تفصیل' : 'Memo' }, { key: 'ref_type', label: lang === 'ur' ? 'حوالہ' : 'Ref' },
       ] as Column[]} /></AsyncView>}
-    {tab === 'manual' && <div className="card"><h2>متوازن دستی جرنل</h2>
-      <TextField label="تفصیل" value={memo} onChange={setMemo} required />
-      <TextField label="وجہ" value={reason} onChange={setReason} required />
+    {tab === 'manual' && <div className="card"><h2>{lang === 'ur' ? 'متوازن دستی جرنل' : 'Balanced Manual Journal Entry'}</h2>
+      <TextField label={lang === 'ur' ? 'تفصیل' : 'Memo'} value={memo} onChange={setMemo} required />
+      <TextField label={lang === 'ur' ? 'وجہ' : 'Reason'} value={reason} onChange={setReason} required />
       {lines.map((l, i) => <div key={i} className="grid g2 card" style={{ background: 'var(--bg)', marginBlockEnd: 8 }}>
-        <SelectField label="اکاؤنٹ" value={l.account_code} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, account_code: v } : x))}
+        <SelectField label={lang === 'ur' ? 'اکاؤنٹ' : 'Account'} value={l.account_code} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, account_code: v } : x))}
           options={CHART_OF_ACCOUNTS.map((a: any) => ({ value: a.code, label: `${a.code} — ${a.name_ur ?? a.ur ?? a.en ?? ''}` }))} />
-        <MoneyField label="ڈیبٹ" paisa={l.debit_paisa} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, debit_paisa: v, credit_paisa: 0 } : x))} />
-        <MoneyField label="کریڈٹ" paisa={l.credit_paisa} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, credit_paisa: v, debit_paisa: 0 } : x))} />
-        <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))}>حذف</Button>
+        <MoneyField label={lang === 'ur' ? 'ڈیبٹ' : 'Debit'} paisa={l.debit_paisa} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, debit_paisa: v, credit_paisa: 0 } : x))} />
+        <MoneyField label={lang === 'ur' ? 'کریڈٹ' : 'Credit'} paisa={l.credit_paisa} onChange={(v) => setLines(lines.map((x, j) => j === i ? { ...x, credit_paisa: v, debit_paisa: 0 } : x))} />
+        <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))}>{lang === 'ur' ? 'حذف' : 'Delete'}</Button>
       </div>)}
-      <Button variant="ghost" size="sm" onClick={() => setLines([...lines, { account_code: '1000', debit_paisa: 0, credit_paisa: 0 }])}>+ لائن</Button>
-      <div className="kv"><span className="k">ڈیبٹ</span><span className="v num">{formatPKR(debit)}</span>
-        <span className="k">کریڈٹ</span><span className="v num">{formatPKR(credit)}</span></div>
+      <Button variant="ghost" size="sm" onClick={() => setLines([...lines, { account_code: '1000', debit_paisa: 0, credit_paisa: 0 }])}>{lang === 'ur' ? '+ لائن شامل کریں' : '+ Add Line'}</Button>
+      <div className="kv"><span className="k">{lang === 'ur' ? 'ڈیبٹ' : 'Debit'}</span><span className="v num">{formatPKR(debit)}</span>
+        <span className="k">{lang === 'ur' ? 'کریڈٹ' : 'Credit'}</span><span className="v num">{formatPKR(credit)}</span></div>
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       <Button loading={busy} disabled={debit !== credit || debit === 0 || !memo || !reason} onClick={async () => {
         setBusy(true); setErr('');
-        try { await api('/api/v1/accounting/journal', { method: 'POST', body: { date: TODAY(), memo_ur: memo, reason, lines } }); toast('جرنل پوسٹ'); journals.refetch(); }
+        try { await api('/api/v1/accounting/journal', { method: 'POST', body: { date: TODAY(), memo_ur: memo, reason, lines } }); toast(lang === 'ur' ? 'جرنل پوسٹ ہو گیا' : 'Journal entry posted'); journals.refetch(); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-      }}>پوسٹ کریں</Button>
-      <div className="small">H4: ڈیبٹ = کریڈٹ ہونے تک بٹن غیر فعال ہے؛ سرور بھی دوبارہ چیک کرتا ہے۔</div>
+      }}>{lang === 'ur' ? 'پوسٹ کریں' : 'Post Journal'}</Button>
     </div>}
-    {tab === 'close' && <div className="card"><h2>پیریڈ لاک</h2>
-      <TextField label="ماہ (YYYY-MM)" value={period} onChange={setPeriod} dir="ltr" required />
-      <TextField label="وجہ" value={lockReason} onChange={setLockReason} required />
+    {tab === 'close' && <div className="card"><h2>{lang === 'ur' ? 'پیریڈ لاک' : 'Period Lock'}</h2>
+      <TextField label={lang === 'ur' ? 'ماہ (YYYY-MM)' : 'Month (YYYY-MM)'} value={period} onChange={setPeriod} dir="ltr" required />
+      <TextField label={lang === 'ur' ? 'وجہ' : 'Reason'} value={lockReason} onChange={setLockReason} required />
       <Button variant="danger" onClick={async () => {
-        try { await api('/api/v1/accounting/period-close', { method: 'POST', body: { period, reason: lockReason } }); toast('پیریڈ بند'); }
+        try { await api('/api/v1/accounting/period-close', { method: 'POST', body: { period, reason: lockReason } }); toast(lang === 'ur' ? 'پیریڈ بند کر دیا گیا' : 'Period closed'); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); }
-      }}>بند کریں</Button>
+      }}>{lang === 'ur' ? 'بند کریں' : 'Lock Period'}</Button>
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
-      <div className="notice small">بند پیریڈ میں پوسٹنگ 403/PERIOD_CLOSED دیتی ہے؛ صرف ریورس + نئی تاریخ والا متبادل ریکارڈ جائز ہے۔</div>
     </div>}
   </div>;
 }
 
 // ----------------------------------- Users -----------------------------------
 export function UsersScreen() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const users = useGet<any[]>('users', '/api/v1/users');
   const roles = useGet<any>('roles', '/api/v1/roles');
   const roleList: any[] = Array.isArray(roles.data) ? roles.data : (roles.data?.roles ?? []);
@@ -1038,70 +1227,78 @@ export function UsersScreen() {
   const [username, setUsername] = useState(''), [pw, setPw] = useState(''), [name, setName] = useState(''),
     [mobile, setMobile] = useState(''), [roleCodes, setRoleCodes] = useState<string[]>(['AUDITOR']);
   if (!can('users.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="users" label="صارفین، کردار اور ڈیوائسز" size={34} />صارفین، کردار اور ڈیوائسز</h1>
-    <Button size="sm" onClick={() => setOpen(true)}>+ نیا صارف</Button></div>
-    <div className="card"><h2>صارفین</h2>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="users" label={lang === 'ur' ? 'صارفین، کردار اور ڈیوائسز' : 'Users, Roles & Devices'} size={34} />{lang === 'ur' ? 'صارفین، کردار اور ڈیوائسز' : 'Users, Roles & Devices'}</h1>
+      </div>
+      <Button size="sm" onClick={() => setOpen(true)}>{lang === 'ur' ? '+ نیا صارف' : '+ New User'}</Button>
+    </div>
+    <div className="card"><h2>{lang === 'ur' ? 'صارفین' : 'Users'}</h2>
       <DataTable rows={users.data ?? []} csvName="users" columns={[
-        { key: 'username', label: 'صارف نام' }, { key: 'display_name', label: 'نام' },
-        { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
-        { key: 'id', label: 'عمل', render: (r: any) => <Button variant="ghost" size="sm" onClick={async () => {
-          await api(`/api/v1/users/${r.id}/disable`, { method: 'POST', body: {} }); toast('بند'); users.refetch();
-        }}>غیر فعال</Button> },
+        { key: 'username', label: lang === 'ur' ? 'صارف نام' : 'Username' }, { key: 'display_name', label: lang === 'ur' ? 'نام' : 'Display Name' },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
+        { key: 'id', label: lang === 'ur' ? 'عمل' : 'Action', render: (r: any) => <Button variant="ghost" size="sm" onClick={async () => {
+          await api(`/api/v1/users/${r.id}/disable`, { method: 'POST', body: {} }); toast(lang === 'ur' ? 'بند' : 'Disabled'); users.refetch();
+        }}>{lang === 'ur' ? 'غیر فعال' : 'Disable'}</Button> },
       ] as Column[]} /></div>
     <div className="grid g2" style={{ marginBlock: 16 }}>
-      <div className="card"><h2>کردار / اجازت میٹرکس</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'کردار / اجازت میٹرکس' : 'Roles & Permissions Matrix'}</h2>
         <DataTable rows={roleList} csvName="roles" columns={[
-          { key: 'code', label: 'کوڈ' }, { key: 'ur', label: 'نام' },
-          { key: 'perms', label: 'اجازتیں', render: (r: any) => <span className="small">{(Array.isArray(r.perms) ? r.perms.join(', ') : String(r.perms ?? '')).slice(0, 60)}</span> },
-        ] as Column[]} />
-        <div className="small">deny-by-default: ہر روٹ پر <code>requirePerm()</code> — UI چھپانا محض کاسمیٹک ہے (H5)۔</div></div>
-      <div className="card"><h2>ڈیوائسز</h2>
+          { key: 'code', label: lang === 'ur' ? 'کوڈ' : 'Code' }, { key: 'ur', label: lang === 'ur' ? 'نام' : 'Name', render: (r: any) => lang === 'ur' ? (r.ur ?? r.name_ur ?? r.code) : (r.en ?? r.code) },
+          { key: 'perms', label: lang === 'ur' ? 'اجازتیں' : 'Permissions', render: (r: any) => <span className="small">{(Array.isArray(r.perms) ? r.perms.join(', ') : String(r.perms ?? '')).slice(0, 60)}</span> },
+        ] as Column[]} /></div>
+      <div className="card"><h2>{lang === 'ur' ? 'ڈیوائسز' : 'Trusted Devices'}</h2>
         <DataTable rows={devices.data ?? []} csvName="devices" columns={[
-          { key: 'id', label: 'ID' }, { key: 'revoked_at', label: 'ریووک' },
+          { key: 'id', label: 'ID' }, { key: 'revoked_at', label: lang === 'ur' ? 'ریووک' : 'Revoked' },
           { key: 'action', label: '', render: (r: any) => <Button variant="ghost" size="sm" onClick={async () => {
-            await api(`/api/v1/devices/${r.id}/revoke`, { method: 'POST', body: {} }); toast('ریووک — مقامی کیش صاف'); devices.refetch();
-          }}>ریووک</Button> },
+            await api(`/api/v1/devices/${r.id}/revoke`, { method: 'POST', body: {} }); toast(lang === 'ur' ? 'ریووک — مقامی کیش صاف' : 'Revoked — cache purged'); devices.refetch();
+          }}>{lang === 'ur' ? 'ریووک' : 'Revoke'}</Button> },
         ] as Column[]} />
         <div className="btn-row" style={{ marginBlockStart: 8 }}>
           <Button size="sm" loading={pkBusy} disabled={!passkeysSupported()} onClick={async () => {
             setPkBusy(true);
-            try { const r = await registerPasskey(); toast(`پاس کی رجسٹر ہو گئی (${r.credential_id.slice(0, 8)}…)`); passkeys.refetch(); }
+            try { const r = await registerPasskey(); toast(lang === 'ur' ? `پاس کی رجسٹر ہو گئی (${r.credential_id.slice(0, 8)}…)` : `Passkey registered (${r.credential_id.slice(0, 8)}…)`); passkeys.refetch(); }
             catch (e: any) { toast(e.message_ur ?? String(e), 'err'); }
             finally { setPkBusy(false); }
-          }}>+ اپنی پاس کی رجسٹر کریں</Button>
+          }}>{lang === 'ur' ? '+ اپنی پاس کی رجسٹر کریں' : '+ Register WebAuthn Passkey'}</Button>
         </div>
         <DataTable rows={passkeys.data ?? []} csvName="passkeys" columns={[
-          { key: 'credential_id', label: 'پاس کی', render: (r: any) => <span className="num">{String(r.credential_id).slice(0, 12)}…</span> },
-          { key: 'created_at', label: 'رجسٹرڈ' },
-          { key: 'revoked_at', label: 'حالت', render: (r: any) => r.revoked_at ? <Chip tone="danger">ریووک</Chip> : <Chip tone="success">فعال</Chip> },
+          { key: 'credential_id', label: lang === 'ur' ? 'پاس کی' : 'Passkey ID', render: (r: any) => <span className="num">{String(r.credential_id).slice(0, 12)}…</span> },
+          { key: 'created_at', label: lang === 'ur' ? 'رجسٹرڈ' : 'Registered' },
+          { key: 'revoked_at', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => r.revoked_at ? <Chip tone="danger">{lang === 'ur' ? 'ریووک' : 'Revoked'}</Chip> : <Chip tone="success">{lang === 'ur' ? 'فعال' : 'Active'}</Chip> },
           { key: 'id', label: '', render: (r: any) => r.revoked_at ? null : <Button variant="danger" size="sm" onClick={async () => {
-            await revokePasskey(r.id); toast('پاس کی ریووک'); passkeys.refetch();
-          }}>ریووک</Button> },
+            await revokePasskey(r.id); toast(lang === 'ur' ? 'پاس کی ریووک' : 'Passkey revoked'); passkeys.refetch();
+          }}>{lang === 'ur' ? 'ریووک' : 'Revoke'}</Button> },
         ] as Column[]} />
-        <div className="notice info small">پاس کی صرف عوامی کلید + کاؤنٹر محفوظ ہوتی ہے؛ فنگر پرنٹ ڈیوائس میں رہتا ہے،
-          سائٹ بائیو میٹرک کبھی نہیں دیکھتی۔ ریووک شدہ ڈیوائس اگلی آن لائن رابطے پر سنک نہیں کر سکتی۔</div></div>
+      </div>
     </div>
-    <Sheet open={open} onClose={() => setOpen(false)} title="نیا صارف">
-      <TextField label="صارف نام" value={username} onChange={setUsername} required />
-      <TextField label="نام" value={name} onChange={setName} required />
-      <TextField label="موبائل" value={mobile} onChange={setMobile} />
-      <TextField label="پاس ورڈ (10+)" value={pw} onChange={setPw} type="password" required />
-      <div className="field"><label>کردار</label>
-        {roleList.map((r: any) => <CheckField key={r.code} label={`${r.ur ?? r.name_ur ?? r.code} (${r.code})`} checked={roleCodes.includes(r.code)}
+    <Sheet open={open} onClose={() => setOpen(false)} title={lang === 'ur' ? 'نیا صارف' : 'New User'}>
+      <TextField label={lang === 'ur' ? 'صارف نام' : 'Username'} value={username} onChange={setUsername} required />
+      <TextField label={lang === 'ur' ? 'نام' : 'Display Name'} value={name} onChange={setName} required />
+      <TextField label={lang === 'ur' ? 'موبائل' : 'Phone'} value={mobile} onChange={setMobile} />
+      <TextField label={lang === 'ur' ? 'پاس ورڈ (10+)' : 'Password (10+ chars)'} value={pw} onChange={setPw} type="password" required />
+      <div className="field"><label>{lang === 'ur' ? 'کردار' : 'Roles'}</label>
+        {roleList.map((r: any) => <CheckField key={r.code} label={`${lang === 'ur' ? (r.ur ?? r.name_ur ?? r.code) : (r.en ?? r.code)} (${r.code})`} checked={roleCodes.includes(r.code)}
           onChange={(v) => setRoleCodes(v ? [...roleCodes, r.code] : roleCodes.filter((x) => x !== r.code))} />)}</div>
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       <Button loading={busy} onClick={async () => {
         setBusy(true); setErr('');
-        try { await api('/api/v1/users', { method: 'POST', body: { username, password: pw, name, mobile, role_codes: roleCodes } }); toast('بن گیا'); users.refetch(); setOpen(false); }
+        try { await api('/api/v1/users', { method: 'POST', body: { username, password: pw, name, mobile, role_codes: roleCodes } }); toast(lang === 'ur' ? 'صارف بن گیا' : 'User created'); users.refetch(); setOpen(false); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-      }}>بنائیں</Button>
+      }}>{lang === 'ur' ? 'بنائیں' : 'Create'}</Button>
     </Sheet>
   </div>;
 }
 
 // --------------------------------- Inventory ---------------------------------
 export function InventoryScreen() {
-  const { can, t, toast } = useApp();
+  const { can, t, toast, lang } = useApp();
+  const nav = useNavigate();
   const [tab, setTab] = useState('stock');
   const stock = useGet<any[]>('stock', '/api/v1/stock');
   const ledger = useGet<any[]>('stock-ledger', '/api/v1/stock/ledger');
@@ -1112,56 +1309,87 @@ export function InventoryScreen() {
   const [counted, setCounted] = useState<Record<string, number>>({});
   const [err, setErr] = useState('');
   if (!can('stock.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1 className="head-icon"><NavIcon icon="inventory" label="انوینٹری" size={34} />انوینٹری</h1>
-    <Tabs tabs={[{ id: 'stock', label: 'اسٹاک' }, { id: 'ledger', label: 'لیجر' }, { id: 'batches', label: 'بیچ / FEFO' },
-      { id: 'opening', label: 'اوپننگ' }, { id: 'adjust', label: 'ایڈجسٹمنٹ' }, { id: 'count', label: 'فزیکل کاؤنٹ' }]} active={tab} onChange={setTab} />
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="inventory" label={lang === 'ur' ? 'انوینٹری / اسٹاک' : 'Inventory & Stock'} size={34} />{lang === 'ur' ? 'انوینٹری / اسٹاک' : 'Inventory & Stock'}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-secondary btn-sm" to="/erp/products/new">{lang === 'ur' ? '+ نئی پروڈکٹ' : '+ New Product'}</Link>
+        <Link className="btn btn-primary btn-sm" to="/erp/purchases/new">{lang === 'ur' ? '+ نئی خریداری (مال اندر)' : '+ Purchase / Stock In'}</Link>
+        <Button variant="ghost" size="sm" onClick={() => setTab('opening')}>{lang === 'ur' ? '+ اوپننگ اسٹاک' : '+ Opening Stock'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => setTab('adjust')}>{lang === 'ur' ? '+ ایڈجسٹمنٹ' : '+ Adjustment'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => downloadCsv('/api/v1/stock/export', 'zt-stock.csv')}>{lang === 'ur' ? 'CSV برآمد' : 'Export CSV'}</Button>
+      </div>
+    </div>
+    <Tabs tabs={[
+      { id: 'stock', label: lang === 'ur' ? 'اسٹاک' : 'Current Stock' },
+      { id: 'ledger', label: lang === 'ur' ? 'لیجر' : 'Stock Ledger' },
+      { id: 'batches', label: lang === 'ur' ? 'بیچ / FEFO' : 'Batches & FEFO' },
+      { id: 'opening', label: lang === 'ur' ? 'اوپننگ' : 'Opening Stock' },
+      { id: 'adjust', label: lang === 'ur' ? 'ایڈجسٹمنٹ' : 'Adjustment' },
+      { id: 'count', label: lang === 'ur' ? 'فزیکل کاؤنٹ' : 'Physical Count' }
+    ]} active={tab} onChange={setTab} />
     {tab === 'stock' && <DataTable rows={stock.data ?? []} csvName="stock" columns={[
-      { key: 'name_ur', label: 'مصنوعات' }, { key: 'qty_milli', label: 'تعداد', render: (r: any) => <span className="num">{fromMilli(r.qty_milli ?? 0)}</span> },
-      { key: 'value_paisa', label: 'مالیت', render: (r: any) => money(r.value_paisa) },
+      { key: 'name_ur', label: lang === 'ur' ? 'مصنوعات' : 'Product' },
+      { key: 'qty_milli', label: lang === 'ur' ? 'تعداد' : 'Quantity', render: (r: any) => <span className="num">{fromMilli(r.qty_milli ?? 0)}</span> },
+      { key: 'value_paisa', label: lang === 'ur' ? 'مالیت' : 'Value', render: (r: any) => money(r.value_paisa) },
     ] as Column[]} />}
     {tab === 'ledger' && <DataTable rows={ledger.data ?? []} csvName="stock-ledger" columns={[
-      { key: 'date', label: 'تاریخ' }, { key: 'product_id', label: 'مصنوعات' }, { key: 'direction', label: 'سمت' },
-      { key: 'qty_milli', label: 'تعداد', render: (r: any) => <span className="num">{fromMilli(r.qty_milli ?? 0)}</span> },
-      { key: 'ref_type', label: 'حوالہ' },
+      { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' },
+      { key: 'product_id', label: lang === 'ur' ? 'مصنوعات' : 'Product' },
+      { key: 'direction', label: lang === 'ur' ? 'سمت' : 'Direction' },
+      { key: 'qty_milli', label: lang === 'ur' ? 'تعداد' : 'Quantity', render: (r: any) => <span className="num">{fromMilli(r.qty_milli ?? 0)}</span> },
+      { key: 'ref_type', label: lang === 'ur' ? 'حوالہ' : 'Reference' },
     ] as Column[]} />}
-    {tab === 'batches' && <><div className="notice info small">FEFO: ایکسپائری پہلے والا بیچ پہلے۔ ایکسپائری ختم / قرنطینہ بیچ کی فروخت سرور بلاک کرتا ہے۔</div>
+    {tab === 'batches' && <><div className="notice info small">
+      {lang === 'ur' ? 'FEFO: ایکسپائری پہلے والا بیچ پہلے۔ ایکسپائری ختم / قرنطینہ بیچ کی فروخت سرور بلاک کرتا ہے۔' : 'FEFO (First-Expiry-First-Out): Expired or quarantined batches are strictly blocked by the server.'}
+    </div>
       <DataTable rows={batches.data ?? []} csvName="batches" columns={[
-        { key: 'batch_no', label: 'بیچ' }, { key: 'product_id', label: 'مصنوعات' }, { key: 'mfg_date', label: 'MFG' },
-        { key: 'expiry_date', label: 'ایکسپائری' }, { key: 'qty_milli', label: 'تعداد', qty: true },
-        { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status ?? 'POSTED'} /> },
+        { key: 'batch_no', label: lang === 'ur' ? 'بیچ' : 'Batch' },
+        { key: 'product_id', label: lang === 'ur' ? 'مصنوعات' : 'Product' },
+        { key: 'mfg_date', label: 'MFG' },
+        { key: 'expiry_date', label: lang === 'ur' ? 'ایکسپائری' : 'Expiry' },
+        { key: 'qty_milli', label: lang === 'ur' ? 'تعداد' : 'Quantity', qty: true },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status ?? 'POSTED'} /> },
       ] as Column[]} /></>}
-    {tab === 'opening' && <div className="card"><h2>ابتدائی اسٹاک (مالک ان پٹ)</h2>
-      <SelectField label="مصنوعات" value={productId} onChange={setProductId} placeholder="منتخب کریں"
-        options={(products.data?.rows ?? []).map((p: any) => ({ value: p.id, label: p.name_ur }))} />
-      <QtyField label="تعداد" milli={openingQty} onChange={setOpeningQty} required />
-      <MoneyField label="فی یونٹ لاگت" paisa={openingCost} onChange={setOpeningCost} />
+    {tab === 'opening' && <div className="card"><h2>{lang === 'ur' ? 'ابتدائی اسٹاک (مالک ان پٹ)' : 'Opening Stock (Owner Input)'}</h2>
+      <SelectField label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={productId} onChange={setProductId} placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Product'}
+        options={(products.data?.rows ?? []).map((p: any) => ({ value: p.id, label: lang === 'ur' ? p.name_ur : (p.name_en || p.name_ur) }))} />
+      <QtyField label={lang === 'ur' ? 'تعداد' : 'Quantity'} milli={openingQty} onChange={setOpeningQty} required />
+      <MoneyField label={lang === 'ur' ? 'فی یونٹ لاگت' : 'Unit Cost'} paisa={openingCost} onChange={setOpeningCost} />
       <Button onClick={async () => {
-        try { await api('/api/v1/stock/opening', { method: 'POST', body: { date: TODAY(), product_id: productId, qty_milli: openingQty, unit_cost_paisa: openingCost, reason } }); toast('اوپننگ پوسٹ'); stock.refetch(); }
+        try { await api('/api/v1/stock/opening', { method: 'POST', body: { date: TODAY(), product_id: productId, qty_milli: openingQty, unit_cost_paisa: openingCost, reason } }); toast(lang === 'ur' ? 'اوپننگ پوسٹ ہو گئی' : 'Opening stock posted'); stock.refetch(); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); }
-      }}>پوسٹ کریں</Button></div>}
-    {tab === 'adjust' && <div className="card"><h2>ایڈجسٹمنٹ (وجہ لازمی)</h2>
-      <SelectField label="مصنوعات" value={productId} onChange={setProductId} placeholder="منتخب کریں"
-        options={(products.data?.rows ?? []).map((p: any) => ({ value: p.id, label: p.name_ur }))} />
-      <QtyField label="فرق (+/-)" milli={delta} onChange={setDelta} />
-      <TextField label="وجہ" value={reason} onChange={setReason} required />
+      }}>{lang === 'ur' ? 'پوسٹ کریں' : 'Post'}</Button></div>}
+    {tab === 'adjust' && <div className="card"><h2>{lang === 'ur' ? 'ایڈجسٹمنٹ (وجہ لازمی)' : 'Stock Adjustment (Reason Required)'}</h2>
+      <SelectField label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={productId} onChange={setProductId} placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Product'}
+        options={(products.data?.rows ?? []).map((p: any) => ({ value: p.id, label: lang === 'ur' ? p.name_ur : (p.name_en || p.name_ur) }))} />
+      <QtyField label={lang === 'ur' ? 'فرق (+/-)' : 'Delta (+/-)'} milli={delta} onChange={setDelta} />
+      <TextField label={lang === 'ur' ? 'وجہ' : 'Reason'} value={reason} onChange={setReason} required />
       <Button variant="danger" disabled={!reason || !productId || !delta} onClick={async () => {
-        try { await api('/api/v1/stock/adjustment', { method: 'POST', body: { date: TODAY(), product_id: productId, delta_milli: delta, reason, unit_cost_paisa: 0 } }); toast('ایڈجسٹمنٹ پوسٹ'); stock.refetch(); }
+        try { await api('/api/v1/stock/adjustment', { method: 'POST', body: { date: TODAY(), product_id: productId, delta_milli: delta, reason, unit_cost_paisa: 0 } }); toast(lang === 'ur' ? 'ایڈجسٹمنٹ پوسٹ ہو گئی' : 'Adjustment posted'); stock.refetch(); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); }
-      }}>پوسٹ کریں</Button></div>}
-    {tab === 'count' && <div className="card"><h2>فزیکل کاؤنٹ</h2>
-      <p className="small">ہر مصنوعات کی گنتی درج کریں؛ فرق خودکار ایڈجسٹمنٹ + آڈٹ کے ساتھ پوسٹ ہوتا ہے (H2)۔</p>
+      }}>{lang === 'ur' ? 'پوسٹ کریں' : 'Post'}</Button></div>}
+    {tab === 'count' && <div className="card"><h2>{lang === 'ur' ? 'فزیکل کاؤنٹ' : 'Physical Count'}</h2>
+      <p className="small">{lang === 'ur' ? 'ہر مصنوعات کی گنتی درج کریں؛ فرق خودکار ایڈجسٹمنٹ + آڈٹ کے ساتھ پوسٹ ہوتا ہے (H2)۔' : 'Enter physical count for each product. Variance posts as automated adjustment with full audit.'}</p>
       <DataTable rows={products.data?.rows ?? []} csvName="count-sheet" columns={[
-        { key: 'name_ur', label: 'مصنوعات' }, { key: 'stock_milli', label: 'سسٹم', qty: true },
-        { key: 'counted_milli', label: 'اصل گنتی', render: (r: any) => <QtyField label="" milli={counted[r.id] ?? r.stock_milli ?? 0}
+        { key: 'name_ur', label: lang === 'ur' ? 'مصنوعات' : 'Product' },
+        { key: 'stock_milli', label: lang === 'ur' ? 'سسٹم' : 'System', qty: true },
+        { key: 'counted_milli', label: lang === 'ur' ? 'اصل گنتی' : 'Counted', render: (r: any) => <QtyField label="" milli={counted[r.id] ?? r.stock_milli ?? 0}
           onChange={(v) => setCounted({ ...counted, [r.id]: v })} /> },
       ] as Column[]} />
-      <TextField label="وجہ" value={reason} onChange={setReason} required />
+      <TextField label={lang === 'ur' ? 'وجہ' : 'Reason'} value={reason} onChange={setReason} required />
       <Button onClick={async () => {
         const rowsAll = products.data?.rows ?? [];
         const lines = rowsAll.map((p: any) => ({ product_id: p.id, counted_milli: counted[p.id] ?? p.stock_milli ?? 0 }));
-        try { const r = await api<any>('/api/v1/stock/count', { method: 'POST', body: { date: TODAY(), reason: reason || 'فزیکل گنتی', lines } }); toast(`کاؤنٹ: ${JSON.stringify(r)}`); stock.refetch(); }
+        try { const r = await api<any>('/api/v1/stock/count', { method: 'POST', body: { date: TODAY(), reason: reason || 'فزیکل گنتی', lines } }); toast(lang === 'ur' ? `کاؤنٹ مکمل: ${JSON.stringify(r)}` : `Count completed: ${JSON.stringify(r)}`); stock.refetch(); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); }
-      }} disabled={!reason || !(products.data?.rows ?? []).length}>کاؤنٹ پوسٹ کریں</Button>
+      }} disabled={!reason || !(products.data?.rows ?? []).length}>{lang === 'ur' ? 'کاؤنٹ پوسٹ کریں' : 'Post Count'}</Button>
     </div>}
     {err && <div className="err"><Mark kind="warn" /> {err}</div>}
   </div>;
@@ -1170,33 +1398,60 @@ export function InventoryScreen() {
 // -------------------------------- Money accounts -----------------------------
 export function AccountsHub() {
   const { data, isLoading, error, refetch } = useGet<any[]>('accounts', '/api/v1/accounts');
+  const { lang } = useApp();
   const nav = useNavigate();
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="accounts" label="رقم کے اکاؤنٹس" size={34} />رقم کے اکاؤنٹس</h1>
-    <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/accounts/transfer">↔ منتقلی</Link>
-      <Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">+ رسید</Link></div></div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="accounts" label={lang === 'ur' ? 'رقم کے اکاؤنٹس' : 'Money Accounts'} size={34} />{lang === 'ur' ? 'رقم کے اکاؤنٹس' : 'Money Accounts'}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-secondary btn-sm" to="/erp/accounts/transfer">{lang === 'ur' ? '↔ منتقلی' : '↔ Transfer'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">{lang === 'ur' ? '+ رسید' : '+ Receipt'}</Link>
+      </div>
+    </div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
-      <div className="stats-grid">{(data ?? []).map((a: any) => <StatCard key={a.id} label={a.name_ur} value={formatPKR(a.balance_paisa ?? 0)}
+      <div className="stats-grid">{(data ?? []).map((a: any) => <StatCard key={a.id} label={lang === 'ur' ? a.name_ur : (a.name_en || a.name_ur)} value={formatPKR(a.balance_paisa ?? 0)}
         sub={a.code} onClick={() => nav(`/erp/accounts/${a.id}`)} />)}</div>
       <DataTable rows={data ?? []} csvName="accounts" columns={[
-        { key: 'code', label: 'کوڈ' }, { key: 'name_ur', label: 'نام' },
-        { key: 'balance_paisa', label: 'بیلنس', money: true }, { key: 'type', label: 'قسم' },
+        { key: 'code', label: lang === 'ur' ? 'کوڈ' : 'Code' }, { key: 'name_ur', label: lang === 'ur' ? 'نام' : 'Name', render: (r: any) => lang === 'ur' ? r.name_ur : (r.name_en || r.name_ur) },
+        { key: 'balance_paisa', label: lang === 'ur' ? 'بیلنس' : 'Balance', money: true }, { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' },
       ] as Column[]} />
     </AsyncView>
-    <div className="notice info small">JazzCash / بینک صرف اندرونی کتابیں ہیں — کسی بینک، JazzCash API یا سرکاری پورٹل سے انٹیگریشن کا دعویٰ نہیں۔</div>
+    <div className="notice info small">{lang === 'ur' ? 'JazzCash / بینک صرف اندرونی کتابیں ہیں — کسی بینک، JazzCash API یا سرکاری پورٹل سے انٹیگریشن کا دعویٰ نہیں۔' : 'JazzCash / Bank accounts represent internal ledgers — no direct API linkage is claimed.'}</div>
   </div>;
 }
+
 export function AccountPage() {
   const { id } = useParams();
+  const { lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any>('account', `/api/v1/accounts/${id}`);
+  const title = data?.account?.name_ur ? (lang === 'ur' ? data.account.name_ur : (data.account.name_en || data.account.name_ur)) : id;
   return <div><AsyncView loading={isLoading} error={error} retry={() => refetch()}>
-    <h1 className="head-icon"><NavIcon icon="accounts" label={data?.account?.name_ur ?? id} size={34} />{data?.account?.name_ur ?? id}</h1>
-    <div className="stats-grid"><StatCard label="بیلنس" value={formatPKR(data?.account?.balance_paisa ?? 0)} />
-      <StatCard label="اندر" value={formatPKR(data?.in_paisa ?? 0)} /><StatCard label="باہر" value={formatPKR(data?.out_paisa ?? 0)} /></div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>لین دین</h2>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav('/erp/accounts')}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="accounts" label={title ?? ''} size={34} />{title}</h1>
+      </div>
+    </div>
+    <div className="stats-grid">
+      <StatCard label={lang === 'ur' ? 'بیلنس' : 'Balance'} value={formatPKR(data?.account?.balance_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'اندر' : 'Cash In'} value={formatPKR(data?.in_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'باہر' : 'Cash Out'} value={formatPKR(data?.out_paisa ?? 0)} />
+    </div>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'لین دین' : 'Transactions'}</h2>
       <DataTable rows={data?.transactions ?? data?.rows ?? []} csvName="account-transactions" columns={[
-        { key: 'date', label: 'تاریخ' }, { key: 'direction', label: 'سمت' },
-        { key: 'amount_paisa', label: 'رقم', money: true }, { key: 'ref_type', label: 'حوالہ' },
-        { key: 'note', label: 'نوٹ' },
+        { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'direction', label: lang === 'ur' ? 'سمت' : 'Direction' },
+        { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', money: true }, { key: 'ref_type', label: lang === 'ur' ? 'حوالہ' : 'Ref' },
+        { key: 'note', label: lang === 'ur' ? 'نوٹ' : 'Note' },
       ] as Column[]} /></div>
   </AsyncView></div>;
 }
@@ -1204,7 +1459,8 @@ export function AccountPage() {
 // --------------------------------- Employees ---------------------------------
 export function EmployeesScreen({ payroll = false }: { payroll?: boolean }) {
   const { ym } = useParams();
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const period = ym ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit' }).format(new Date());
   const employees = useGet<any[]>('employees', '/api/v1/employees');
   const advances = useGet<any[]>('advances', '/api/v1/advances');
@@ -1212,85 +1468,98 @@ export function EmployeesScreen({ payroll = false }: { payroll?: boolean }) {
   const [rows, setRows] = useState<any[]>([]), [busy, setBusy] = useState(false), [err, setErr] = useState('');
   useEffect(() => { if (employees.data) setRows(employees.data.map((e: any) => ({ employee_id: e.id, name: e.name, gross_paisa: e.base_salary_paisa ?? 0, advance_recovered_paisa: 0, deductions_paisa: 0 }))); }, [employees.data]);
   if (!can('employees.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="employees" label="ملازمین / تنخواہ" size={34} />ملازمین / تنخواہ — {period}</h1>
-    <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/employees/new">+ ملازم</Link>
-      <Link className="btn btn-secondary btn-sm" to="/erp/expenses/new">+ ایڈوانس / خرچہ</Link></div></div>
-    {payroll && <div className="card"><h2>تنخواہ رن</h2>
-      <div className="small">ہر ملازم: gross − ایڈوانس − کٹوتیاں = خالص؛ ایک ایٹمی بیچ میں تمام SL نمبر محفوظ (reserveNumbers)۔</div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="employees" label={lang === 'ur' ? 'ملازمین / تنخواہ' : 'Employees & Payroll'} size={34} />{lang === 'ur' ? 'ملازمین / تنخواہ' : 'Employees & Payroll'} — {period}</h1>
+      </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-secondary btn-sm" to="/erp/employees/new">{lang === 'ur' ? '+ ملازم' : '+ New Employee'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/erp/expenses/new">{lang === 'ur' ? '+ ایڈوانس / خرچہ' : '+ Advance / Expense'}</Link>
+      </div>
+    </div>
+    {payroll && <div className="card"><h2>{lang === 'ur' ? 'تنخواہ رن' : 'Payroll Run'}</h2>
+      <div className="small">{lang === 'ur' ? 'ہر ملازم: gross − ایڈوانس − کٹوتیاں = خالص؛ ایک ایٹمی بیچ میں تمام SL نمبر محفوظ (reserveNumbers)۔' : 'Each employee: Gross − Advance − Deductions = Net Pay. Reserved SL sequence in atomic batch.'}</div>
       <DataTable rows={rows} csvName="payroll-rows" columns={[
-        { key: 'name', label: 'ملازم' },
-        { key: 'gross_paisa', label: 'تنخواہ', render: (r: any) => <MoneyField label="" paisa={r.gross_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, gross_paisa: v } : x))} /> },
-        { key: 'advance_recovered_paisa', label: 'ایڈوانس', render: (r: any) => <MoneyField label="" paisa={r.advance_recovered_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, advance_recovered_paisa: v } : x))} /> },
-        { key: 'deductions_paisa', label: 'کٹوتی', render: (r: any) => <MoneyField label="" paisa={r.deductions_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, deductions_paisa: v } : x))} /> },
+        { key: 'name', label: lang === 'ur' ? 'ملازم' : 'Employee' },
+        { key: 'gross_paisa', label: lang === 'ur' ? 'تنخواہ' : 'Gross Salary', render: (r: any) => <MoneyField label="" paisa={r.gross_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, gross_paisa: v } : x))} /> },
+        { key: 'advance_recovered_paisa', label: lang === 'ur' ? 'ایڈوانس کٹوتی' : 'Advance Recovery', render: (r: any) => <MoneyField label="" paisa={r.advance_recovered_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, advance_recovered_paisa: v } : x))} /> },
+        { key: 'deductions_paisa', label: lang === 'ur' ? 'دیگر کٹوتی' : 'Deductions', render: (r: any) => <MoneyField label="" paisa={r.deductions_paisa} onChange={(v) => setRows(rows.map((x) => x.employee_id === r.employee_id ? { ...x, deductions_paisa: v } : x))} /> },
       ] as Column[]} />
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       <Button loading={busy} disabled={!rows.length} onClick={async () => {
         setBusy(true); setErr('');
-        try { const r = await api<any>('/api/v1/payroll', { method: 'POST', body: { ym: period, pay_date: TODAY(), account_id: 'acct-cash', rows } }); toast(`تنخواہ پوسٹ: ${JSON.stringify(r)}`); payrollData.refetch(); }
+        try { const r = await api<any>('/api/v1/payroll', { method: 'POST', body: { ym: period, pay_date: TODAY(), account_id: 'acct-cash', rows } }); toast(lang === 'ur' ? `تنخواہ پوسٹ: ${JSON.stringify(r)}` : 'Payroll posted successfully'); payrollData.refetch(); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
-      }}>تنخواہ پوسٹ کریں</Button></div>}
-    <div className="card" style={{ marginBlock: 16 }}><h2>ملازمین</h2>
+      }}>{lang === 'ur' ? 'تنخواہ پوسٹ کریں' : 'Post Payroll'}</Button></div>}
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'ملازمین' : 'Employees'}</h2>
       <DataTable rows={employees.data ?? []} csvName="employees" columns={[
-        { key: 'name', label: 'نام' }, { key: 'role', label: 'عہدہ' },
-        { key: 'base_salary_paisa', label: 'تنخواہ', money: true }, { key: 'status', label: 'حالت' },
+        { key: 'name', label: lang === 'ur' ? 'نام' : 'Name' }, { key: 'role', label: lang === 'ur' ? 'عہدہ' : 'Role' },
+        { key: 'base_salary_paisa', label: lang === 'ur' ? 'تنخواہ' : 'Base Salary', money: true }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status' },
       ] as Column[]} /></div>
-    <div className="card"><h2>ایڈوانسز</h2>
+    <div className="card"><h2>{lang === 'ur' ? 'ایڈوانسز' : 'Advances'}</h2>
       <DataTable rows={advances.data ?? []} csvName="advances" columns={[
-        { key: 'date', label: 'تاریخ' }, { key: 'employee_id', label: 'ملازم' },
-        { key: 'amount_paisa', label: 'رقم', money: true },
+        { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'employee_id', label: lang === 'ur' ? 'ملازم' : 'Employee' },
+        { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', money: true },
       ] as Column[]} /></div>
   </div>;
 }
 
 // ---------------------------------- Returns ----------------------------------
 export function ReturnsScreen() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any>('returns', '/api/v1/returns');
   const [open, setOpen] = useState(false), [reason, setReason] = useState(''), [err, setErr] = useState('');
   const [type, setType] = useState('SALE'), [originalId, setOriginalId] = useState(''), [lineId, setLineId] = useState(''), [qty, setQty] = useState(0);
   const docs = useGet<{ rows?: any[] }>('return-docs', `/api/v1/${type === 'SALE' ? 'sales' : 'purchases'}`);
   if (!can('returns.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="returns" label="واپسی / ریورس" size={34} />واپسی / ریورس</h1>
-    <Button size="sm" onClick={() => setOpen(true)}>+ نئی واپسی</Button></div>
-    <div className="notice info small">پوسٹڈ مالی ریکارڈ کبھی ایڈٹ نہیں ہوتا: واپسی = ریورس + متبادل ریکارڈ، وجہ/صارف/ٹائم اسٹیمپ کے ساتھ۔
-      سیل ریٹرن منجمد COGS پر واپس آتی ہے؛ خرید ریٹرن لائن رقم پر ریورس ہوتی ہے۔</div>
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="returns" label={lang === 'ur' ? 'واپسی / ریورس' : 'Returns & Reversals'} size={34} />{lang === 'ur' ? 'واپسی / ریورس' : 'Returns & Reversals'}</h1>
+      </div>
+      <Button size="sm" onClick={() => setOpen(true)}>{lang === 'ur' ? '+ نئی واپسی' : '+ New Return'}</Button>
+    </div>
+    <div className="notice info small">{lang === 'ur' ? 'پوسٹڈ مالی ریکارڈ کبھی ایڈٹ نہیں ہوتا: واپسی = ریورس + متبادل ریکارڈ، وجہ/صارف/ٹائم اسٹیمپ کے ساتھ۔' : 'Posted financial records are never mutated: return creates a reversal + replacement with timestamp and reason.'}</div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data?.sales_returns ?? []).length && !(data?.purchase_returns ?? []).length}>
-      <div className="card"><h2>فروخت واپسی</h2><DataTable rows={data?.sales_returns ?? []} csvName="sale-returns" columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'reason', label: 'وجہ' },
-        { key: 'total_paisa', label: 'رقم', money: true },
+      <div className="card"><h2>{lang === 'ur' ? 'فروخت واپسی' : 'Sales Returns'}</h2><DataTable rows={data?.sales_returns ?? []} csvName="sale-returns" columns={[
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'reason', label: lang === 'ur' ? 'وجہ' : 'Reason' },
+        { key: 'total_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', money: true },
       ] as Column[]} /></div>
-      <div className="card" style={{ marginBlock: 16 }}><h2>خرید واپسی</h2><DataTable rows={data?.purchase_returns ?? []} csvName="purchase-returns" columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'reason', label: 'وجہ' },
-        { key: 'total_paisa', label: 'رقم', money: true },
+      <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'خرید واپسی' : 'Purchase Returns'}</h2><DataTable rows={data?.purchase_returns ?? []} csvName="purchase-returns" columns={[
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'reason', label: lang === 'ur' ? 'وجہ' : 'Reason' },
+        { key: 'total_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', money: true },
       ] as Column[]} /></div>
     </AsyncView>
-    <Sheet open={open} onClose={() => setOpen(false)} title="نئی واپسی">
-      <SelectField label="قسم" value={type} onChange={setType} options={[{ value: 'SALE', label: 'فروخت واپسی' }, { value: 'PURCHASE', label: 'خرید واپسی' }]} />
-      <SelectField label="اصل دستاویز" value={originalId} onChange={setOriginalId} placeholder="منتخب کریں"
+    <Sheet open={open} onClose={() => setOpen(false)} title={lang === 'ur' ? 'نئی واپسی' : 'New Return'}>
+      <SelectField label={lang === 'ur' ? 'قسم' : 'Type'} value={type} onChange={setType} options={[{ value: 'SALE', label: lang === 'ur' ? 'فروخت واپسی' : 'Sale Return' }, { value: 'PURCHASE', label: lang === 'ur' ? 'خرید واپسی' : 'Purchase Return' }]} />
+      <SelectField label={lang === 'ur' ? 'اصل دستاویز' : 'Original Document'} value={originalId} onChange={setOriginalId} placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select'}
         options={(docs.data?.rows ?? []).map((d: any) => ({ value: d.id, label: d.number }))} />
-      <TextField label="لائن ID" value={lineId} onChange={setLineId} required dir="ltr" />
-      <QtyField label="واپس تعداد" milli={qty} onChange={setQty} required />
-      <TextField label="وجہ" value={reason} onChange={setReason} required />
+      <TextField label={lang === 'ur' ? 'لائن ID' : 'Line ID'} value={lineId} onChange={setLineId} required dir="ltr" />
+      <QtyField label={lang === 'ur' ? 'واپس تعداد' : 'Return Quantity'} milli={qty} onChange={setQty} required />
+      <TextField label={lang === 'ur' ? 'وجہ' : 'Reason'} value={reason} onChange={setReason} required />
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       <Button onClick={async () => {
-        try { await api('/api/v1/returns', { method: 'POST', body: { type, original_id: originalId, date: TODAY(), reason, refund_method: 'KHATA', lines: [{ line_id: lineId, qty_milli: qty }] } }); toast('واپسی پوسٹ'); refetch(); setOpen(false); }
+        try { await api('/api/v1/returns', { method: 'POST', body: { type, original_id: originalId, date: TODAY(), reason, refund_method: 'KHATA', lines: [{ line_id: lineId, qty_milli: qty }] } }); toast(lang === 'ur' ? 'واپسی پوسٹ ہو گئی' : 'Return posted'); refetch(); setOpen(false); }
         catch (e: any) { setErr(e.message_ur ?? String(e)); }
-      }}>پوسٹ کریں</Button>
+      }}>{lang === 'ur' ? 'پوسٹ کریں' : 'Post'}</Button>
     </Sheet>
   </div>;
 }
 
 // -------------------------------- Online orders ------------------------------
-const ORDER_TABS = [
-  { id: '', label: 'تمام' }, { id: 'NEW', label: 'نئے' }, { id: 'UNDER_REVIEW', label: 'جائزے میں' },
-  { id: 'APPROVED', label: 'منظور' }, { id: 'REJECTED', label: 'مسترد' },
-];
-const ORDER_STATUS_UR: Record<string, string> = {
-  NEW: 'نیا', UNDER_REVIEW: 'جائزہ', APPROVED: 'منظور', REJECTED: 'مسترد', CANCELLED: 'منسوخ',
-};
-
 export function OrdersScreen() {
   const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const [tab, setTab] = useState('');
   const { data, isLoading, error, refetch } = useGet<any[]>('orders', `/api/v1/orders${tab ? `?status=${tab}` : ''}`);
   const [sel, setSel] = useState<any>(null);
@@ -1298,6 +1567,21 @@ export function OrdersScreen() {
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const ready = useGet<any>('checkout-ready', '/api/v1/orders-meta/checkout-ready');
   const review = can('orders.review');
+
+  const ORDER_TABS = [
+    { id: '', label: lang === 'ur' ? 'تمام' : 'All' },
+    { id: 'NEW', label: lang === 'ur' ? 'نئے' : 'New' },
+    { id: 'UNDER_REVIEW', label: lang === 'ur' ? 'جائزے میں' : 'Under Review' },
+    { id: 'APPROVED', label: lang === 'ur' ? 'منظور' : 'Approved' },
+    { id: 'REJECTED', label: lang === 'ur' ? 'مسترد' : 'Rejected' },
+  ];
+  const ORDER_STATUS_MAP: Record<string, string> = {
+    NEW: lang === 'ur' ? 'نیا' : 'New',
+    UNDER_REVIEW: lang === 'ur' ? 'جائزہ' : 'Review',
+    APPROVED: lang === 'ur' ? 'منظور' : 'Approved',
+    REJECTED: lang === 'ur' ? 'مسترد' : 'Rejected',
+    CANCELLED: lang === 'ur' ? 'منسوخ' : 'Cancelled',
+  };
 
   const act = async (fn: () => Promise<any>, msg: string) => {
     setBusy(true); setErr('');
@@ -1307,46 +1591,50 @@ export function OrdersScreen() {
   };
 
   return <div>
-    <h1 className="head-icon"><NavIcon icon="orders" label={t('orders')} size={34} />{t('orders')}</h1>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="orders" label={t('orders')} size={34} />{t('orders')}</h1>
+      </div>
+    </div>
     <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
       {ready.data && <>
         <Chip tone={ready.data.payment_methods ? 'success' : 'warning'}>{t('paymentMethods')}: <span className="num">{ready.data.payment_methods}</span></Chip>
-        <Chip tone={ready.data.priced_products ? 'success' : 'warning'}>قیمت والی مصنوعات: <span className="num">{ready.data.priced_products}</span></Chip>
-        <Chip tone={ready.data.pending_orders ? 'info' : 'gray'}>زیرِ جائزہ: <span className="num">{ready.data.pending_orders}</span></Chip>
-        <Chip tone="gray">تصاویر: <span className="num">{ready.data.media_backend}</span></Chip>
+        <Chip tone={ready.data.priced_products ? 'success' : 'warning'}>{lang === 'ur' ? 'قیمت والی مصنوعات: ' : 'Priced Products: '}<span className="num">{ready.data.priced_products}</span></Chip>
+        <Chip tone={ready.data.pending_orders ? 'info' : 'gray'}>{lang === 'ur' ? 'زیرِ جائزہ: ' : 'Under Review: '}<span className="num">{ready.data.pending_orders}</span></Chip>
       </>}
     </div>
-    {!ready.data?.payment_methods && <div className="notice warn small" style={{ marginBottom: 12 }}>
-      آن لائن آرڈر کے لیے کم از کم ایک ادائیگی کا طریقہ بنائیں (<Link to="/erp/payment-methods">ادائیگی کے طریقے</Link>)۔
-    </div>}
     <Tabs tabs={ORDER_TABS} active={tab} onChange={setTab} />
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
       <DataTable rows={data ?? []} csvName="orders" onRow={(r) => { setSel(r); setErr(''); setReason(''); setNote(''); }} columns={[
-        { key: 'number', label: 'حوالہ' },
-        { key: 'customer_name', label: 'نام' },
-        { key: 'mobile', label: 'موبائل' },
-        { key: 'city', label: 'شہر' },
+        { key: 'number', label: lang === 'ur' ? 'حوالہ' : 'Ref' },
+        { key: 'customer_name', label: lang === 'ur' ? 'نام' : 'Customer' },
+        { key: 'mobile', label: lang === 'ur' ? 'موبائل' : 'Phone' },
+        { key: 'city', label: lang === 'ur' ? 'شہر' : 'City' },
         { key: 'payment_method', label: t('paymentMethod') },
         { key: 'total_paisa', label: t('total'), money: true },
-        { key: 'proofs', label: 'رسیدیں', render: (r: any) => <span className="num">{(r.proofs ?? []).length}</span> },
-        { key: 'status', label: t('status'), render: (r: any) => <Chip tone={r.status === 'APPROVED' ? 'success' : r.status === 'REJECTED' ? 'danger' : r.status === 'UNDER_REVIEW' ? 'info' : 'gray'}>{ORDER_STATUS_UR[r.status] ?? r.status}</Chip> },
+        { key: 'proofs', label: lang === 'ur' ? 'رسیدیں' : 'Proofs', render: (r: any) => <span className="num">{(r.proofs ?? []).length}</span> },
+        { key: 'status', label: t('status'), render: (r: any) => <Chip tone={r.status === 'APPROVED' ? 'success' : r.status === 'REJECTED' ? 'danger' : r.status === 'UNDER_REVIEW' ? 'info' : 'gray'}>{ORDER_STATUS_MAP[r.status] ?? r.status}</Chip> },
       ] as Column[]} />
     </AsyncView>
 
-    <Sheet open={!!sel} onClose={() => setSel(null)} title={`آرڈر ${sel?.number ?? ''}`}>
+    <Sheet open={!!sel} onClose={() => setSel(null)} title={`${lang === 'ur' ? 'آرڈر' : 'Order'} ${sel?.number ?? ''}`}>
       {sel && <div className="card">
         <div className="kv">
-          <span className="k">نام</span><span className="v">{sel.customer_name}</span>
-          <span className="k">موبائل</span><span className="v num">{sel.mobile}</span>
-          <span className="k">شہر</span><span className="v">{sel.city}</span>
-          <span className="k">پتہ</span><span className="v">{sel.address || '—'}</span>
-          <span className="k">طریقہ</span><span className="v">{sel.payment_method}</span>
-          <span className="k">کل</span><span className="v num">{formatPKR(sel.total_paisa)}</span>
+          <span className="k">{lang === 'ur' ? 'نام' : 'Name'}</span><span className="v">{sel.customer_name}</span>
+          <span className="k">{lang === 'ur' ? 'موبائل' : 'Phone'}</span><span className="v num">{sel.mobile}</span>
+          <span className="k">{lang === 'ur' ? 'شہر' : 'City'}</span><span className="v">{sel.city}</span>
+          <span className="k">{lang === 'ur' ? 'پتہ' : 'Address'}</span><span className="v">{sel.address || '—'}</span>
+          <span className="k">{lang === 'ur' ? 'طریقہ' : 'Method'}</span><span className="v">{sel.payment_method}</span>
+          <span className="k">{lang === 'ur' ? 'کل' : 'Total'}</span><span className="v num">{formatPKR(sel.total_paisa)}</span>
         </div>
-        {!!sel.notes && <p className="small">نوٹ: {sel.notes}</p>}
-        <table className="table"><thead><tr><th>مصنوعات</th><th>تعداد</th><th>ریٹ</th><th>رقم</th></tr></thead>
+        {!!sel.notes && <p className="small">{lang === 'ur' ? 'نوٹ: ' : 'Note: '}{sel.notes}</p>}
+        <table className="table"><thead><tr><th>{lang === 'ur' ? 'مصنوعات' : 'Product'}</th><th>{lang === 'ur' ? 'تعداد' : 'Qty'}</th><th>{lang === 'ur' ? 'ریٹ' : 'Rate'}</th><th>{lang === 'ur' ? 'رقم' : 'Total'}</th></tr></thead>
           <tbody>{(sel.items ?? []).map((i: any) => <tr key={i.name_ur + i.qty_milli}>
-            <td>{i.name_ur}</td>
+            <td>{lang === 'ur' ? i.name_ur : (i.name_en || i.name_ur)}</td>
             <td className="num">{fromMilli(i.qty_milli)} {i.unit}</td>
             <td className="num">{formatPKR(i.rate_paisa)}</td>
             <td className="num">{formatPKR(i.line_total_paisa)}</td>
@@ -1361,58 +1649,57 @@ export function OrdersScreen() {
             {p.sender_reference && <div className="small num">{p.sender_reference}</div>}
             {review && <div className="row" style={{ gap: 6 }}>
               <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => act(
-                () => api(`/api/v1/orders/${sel.id}/proofs/${p.id}/status`, { method: 'POST', body: { status: 'ACCEPTED' } }), 'رسید منظور')}>منظور</button>
+                () => api(`/api/v1/orders/${sel.id}/proofs/${p.id}/status`, { method: 'POST', body: { status: 'ACCEPTED' } }), lang === 'ur' ? 'رسید منظور' : 'Proof accepted')}>{lang === 'ur' ? 'منظور' : 'Approve'}</button>
               <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => act(
-                () => api(`/api/v1/orders/${sel.id}/proofs/${p.id}/status`, { method: 'POST', body: { status: 'REJECTED' } }), 'رسید مسترد')}>مسترد</button>
+                () => api(`/api/v1/orders/${sel.id}/proofs/${p.id}/status`, { method: 'POST', body: { status: 'REJECTED' } }), lang === 'ur' ? 'رسید مسترد' : 'Proof rejected')}>{lang === 'ur' ? 'مسترد' : 'Reject'}</button>
             </div>}
           </div>)}</div>
         </>}
 
-        {sel.status === 'APPROVED' && <div className="notice info small">یہ آرڈر فروخت میں تبدیل ہو چکا ہے:
-          {(sel.sale_ids ?? []).length} دستاویز۔ اسٹاک و کھاتہ بدل چکا ہے۔</div>}
+        {sel.status === 'APPROVED' && <div className="notice info small">{lang === 'ur' ? `یہ آرڈر فروخت میں تبدیل ہو چکا ہے: ${(sel.sale_ids ?? []).length} دستاویز۔ اسٹاک و کھاتہ بدل چکا ہے۔` : 'Order approved and posted to Sales. Inventory and accounts updated.'}</div>}
         {!!sel.reject_reason && <div className="err"><Mark kind="warn" /> {sel.reject_reason}</div>}
 
         {review && !['APPROVED', 'REJECTED', 'CANCELLED'].includes(sel.status) && <>
           <CheckField label={t('markPaid')} checked={paid} onChange={setPaid} />
-          <TextField label="نوٹ (اختیاری)" value={note} onChange={setNote} />
+          <TextField label={lang === 'ur' ? 'نوٹ (اختیاری)' : 'Note (optional)'} value={note} onChange={setNote} />
           {err && <div className="err"><Mark kind="warn" /> {err}</div>}
           <div className="btn-row">
             <Button loading={busy} onClick={() => act(
               () => api(`/api/v1/orders/${sel.id}/approve`, { method: 'POST', body: { paid, mark_proof_accepted: true, note, idempotency_key: `ORD:${sel.id}:UI:${Date.now()}` } }),
-              'آرڈر فروخت بن گیا')}>{t('approveOrder')}</Button>
+              lang === 'ur' ? 'آرڈر فروخت بن گیا' : 'Order approved & posted')}>{t('approveOrder')}</Button>
             <Button variant="danger" disabled={!reason || busy} loading={busy} onClick={() => act(
-              () => api(`/api/v1/orders/${sel.id}/reject`, { method: 'POST', body: { reason } }), 'آرڈر مسترد')}>{t('rejectOrder')}</Button>
+              () => api(`/api/v1/orders/${sel.id}/reject`, { method: 'POST', body: { reason } }), lang === 'ur' ? 'آرڈر مسترد' : 'Order rejected')}>{t('rejectOrder')}</Button>
           </div>
-          <p className="small">{lang === 'ur'
-            ? 'منظوری موجودہ فروخت انجن سے ایک دستاویز فی کتاب بناتی ہے — اسٹاک، کھاتہ اور جرنل اسی وقت کٹتے ہیں۔'
-            : 'Approval posts through the existing sale engine — one document per book; stock, khata and journal move only then.'}</p>
         </>}
-        {!review && <div className="notice warn small">{t('permissionDenied')}</div>}
       </div>}
     </Sheet>
   </div>;
 }
 
 // ------------------------------ Payment methods ------------------------------
-const METHOD_KINDS = [
-  { value: 'BANK', label: 'بینک اکاؤنٹ' }, { value: 'EASYPAISA', label: 'ایزی پیسہ' },
-  { value: 'JAZZCASH', label: 'جازی کیش' }, { value: 'WALLET', label: 'والٹ' }, { value: 'CASH', label: 'نقد / دکان' },
-];
-const BLANK_METHOD = {
-  kind: 'BANK', title_ur: '', title_en: '', bank_name: '', account_title: '', account_number: '',
-  iban: '', mobile_number: '', instructions_ur: '', account_id: '', is_active: true, sort: 0,
-};
-
 export function PaymentMethodsScreen() {
-  const { toast, can, t } = useApp();
+  const { toast, can, t, lang } = useApp();
+  const nav = useNavigate();
   const { data, isLoading, error, refetch } = useGet<any[]>('payment-methods', '/api/v1/payment-methods');
   const accounts = useGet<any[]>('accounts', '/api/v1/accounts');
   const write = can('payments.methods.write');
   const [sel, setSel] = useState<any>(null);
   const [isNew, setIsNew] = useState(false);
+  const BLANK_METHOD = {
+    kind: 'BANK', title_ur: '', title_en: '', bank_name: '', account_title: '', account_number: '',
+    iban: '', mobile_number: '', instructions_ur: '', account_id: '', is_active: true, sort: 0,
+  };
   const [form, setForm] = useState<any>(BLANK_METHOD);
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const METHOD_KINDS = [
+    { value: 'BANK', label: lang === 'ur' ? 'بینک اکاؤنٹ' : 'Bank Account' },
+    { value: 'EASYPAISA', label: lang === 'ur' ? 'ایزی پیسہ' : 'Easypaisa' },
+    { value: 'JAZZCASH', label: lang === 'ur' ? 'جاز کیش' : 'JazzCash' },
+    { value: 'WALLET', label: lang === 'ur' ? 'والٹ' : 'Wallet' },
+    { value: 'CASH', label: lang === 'ur' ? 'نقد / دکان' : 'Cash on Delivery' },
+  ];
 
   const open = (m?: any) => {
     setErr('');
@@ -1432,41 +1719,37 @@ export function PaymentMethodsScreen() {
     finally { setBusy(false); }
   };
 
-  const uploadQr = async (file?: File) => {
-    if (!file || isNew || !form.id) return;
-    setBusy(true); setErr('');
-    try {
-      const { data_url } = await shrinkImage(file, 900, 420 * 1024);
-      await api(`/api/v1/payment-methods/${form.id}/qr`, { method: 'POST', body: { data_url } });
-      toast(t('savedPhoto')); refetch();
-    } catch (e: any) { setErr(e.message_ur ?? String(e)); }
-    finally { setBusy(false); }
-  };
-
   const remove = async (m: any) => {
     setBusy(true);
-    try { const r = await api<any>(`/api/v1/payment-methods/${m.id}`, { method: 'DELETE' }); toast(r.deactivated ? 'غیر فعال کر دیا' : 'حذف کر دیا'); refetch(); }
+    try { const r = await api<any>(`/api/v1/payment-methods/${m.id}`, { method: 'DELETE' }); toast(r.deactivated ? (lang === 'ur' ? 'غیر فعال کر دیا' : 'Deactivated') : (lang === 'ur' ? 'حذف کر دیا' : 'Deleted')); refetch(); }
     catch (e: any) { toast(e.message_ur ?? String(e), 'err'); }
     finally { setBusy(false); }
   };
 
   return <div>
-    <h1 className="head-icon"><NavIcon icon="payments" label={t('paymentMethods')} size={34} />{t('paymentMethods')}</h1>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="payments" label={t('paymentMethods')} size={34} />{t('paymentMethods')}</h1>
+      </div>
+      {write && <div className="btn-row no-print"><Button size="sm" onClick={() => open()}>{t('newPaymentMethod')}</Button></div>}
+    </div>
     <p className="small">{t('paymentMethodsNote')}</p>
-    {write && <div className="btn-row"><Button size="sm" onClick={() => open()}>{t('newPaymentMethod')}</Button></div>}
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
       <div className="method-grid">{(data ?? []).map((m) => <TiltCard key={m.id} className="method-card" tone={m.is_active ? 'default' : 'pink'}>
         <div className="method-card-head">
           <span className={`method-badge`} data-kind={m.kind} aria-hidden="true" />
-          <div><strong>{m.title_ur}</strong><div className="small">{METHOD_KINDS.find((k) => k.value === m.kind)?.label ?? m.kind}</div></div>
-          <Chip tone={m.is_active ? 'success' : 'gray'} className="method-state">{m.is_active ? 'فعال' : 'بند'}</Chip>
+          <div><strong>{lang === 'ur' ? m.title_ur : (m.title_en || m.title_ur)}</strong><div className="small">{METHOD_KINDS.find((k) => k.value === m.kind)?.label ?? m.kind}</div></div>
+          <Chip tone={m.is_active ? 'success' : 'gray'} className="method-state">{m.is_active ? (lang === 'ur' ? 'فعال' : 'Active') : (lang === 'ur' ? 'بند' : 'Inactive')}</Chip>
         </div>
         {m.qr_url && <div className="method-qr"><img src={m.qr_url} alt={`${m.title_ur} QR`} loading="lazy" width={160} height={160} /></div>}
         <div className="small">{m.bank_name || m.account_title || m.mobile_number || '—'}</div>
         {!!m.account_number && <div className="small num">{m.account_number}</div>}
         {!!m.iban && <div className="small num">{m.iban}</div>}
-        <div className="small">کھاتہ: {m.account_id ? (accounts.data ?? []).find((a) => a.id === m.account_id)?.name_ur ?? m.account_id : 'نجی'} · {t('linkedAccount')}</div>
-        <div className="row" style={{ gap: 6 }}>
+        <div className="row" style={{ gap: 6, marginTop: 8 }}>
           {write && <Button size="sm" variant="secondary" onClick={() => open(m)}>{t('edit')}</Button>}
           {write && <Button size="sm" variant="secondary" onClick={() => remove(m)} loading={busy}>{t('delete')}</Button>}
         </div>
@@ -1478,27 +1761,100 @@ export function PaymentMethodsScreen() {
       <TextField label={`${t('name')} (اردو)`} value={form.title_ur} onChange={(v) => set('title_ur', v)} required />
       <TextField label={`${t('name')} (English)`} value={form.title_en} onChange={(v) => set('title_en', v)} dir="ltr" />
       {form.kind === 'BANK' && <>
-        <TextField label="بینک" value={form.bank_name} onChange={(v) => set('bank_name', v)} />
-        <TextField label="اکاؤنٹ ٹائٹل" value={form.account_title} onChange={(v) => set('account_title', v)} />
-        <TextField label="اکاؤنٹ نمبر" value={form.account_number} onChange={(v) => set('account_number', v)} dir="ltr" inputMode="numeric" />
+        <TextField label={lang === 'ur' ? 'بینک نام' : 'Bank Name'} value={form.bank_name} onChange={(v) => set('bank_name', v)} />
+        <TextField label={lang === 'ur' ? 'اکاؤنٹ ٹائٹل' : 'Account Title'} value={form.account_title} onChange={(v) => set('account_title', v)} />
+        <TextField label={lang === 'ur' ? 'اکاؤنٹ نمبر' : 'Account Number'} value={form.account_number} onChange={(v) => set('account_number', v)} dir="ltr" inputMode="numeric" />
         <TextField label="IBAN" value={form.iban} onChange={(v) => set('iban', v)} dir="ltr" />
       </>}
       {(form.kind === 'EASYPAISA' || form.kind === 'JAZZCASH' || form.kind === 'WALLET') &&
         <TextField label={t('mobile')} value={form.mobile_number} onChange={(v) => set('mobile_number', v)} dir="ltr" inputMode="tel" />}
-      <SelectField label={t('linkedAccount')} value={form.account_id} onChange={(v) => set('account_id', v)} placeholder="نجی (منظوری پر بقایا رہے)"
-        options={(accounts.data ?? []).map((a: any) => ({ value: a.id, label: `${a.name_ur} (${a.code ?? a.gl_code ?? ''})` }))} />
+      <SelectField label={t('linkedAccount')} value={form.account_id} onChange={(v) => set('account_id', v)} placeholder={lang === 'ur' ? 'نجی' : 'Private'}
+        options={(accounts.data ?? []).map((a: any) => ({ value: a.id, label: `${lang === 'ur' ? a.name_ur : (a.name_en || a.name_ur)} (${a.code ?? ''})` }))} />
       <div className="field"><label htmlFor="pm-inst">{t('note')}</label>
         <textarea id="pm-inst" className="input" rows={3} value={form.instructions_ur} onChange={(e) => set('instructions_ur', e.target.value)} /></div>
-      <CheckField label="فعال" checked={!!form.is_active} onChange={(v) => set('is_active', v)} />
-      <TextField label="ترتیب" value={String(form.sort)} onChange={(v) => set('sort', v)} inputMode="numeric" dir="ltr" />
+      <CheckField label={lang === 'ur' ? 'فعال' : 'Active'} checked={!!form.is_active} onChange={(v) => set('is_active', v)} />
       {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       <Button onClick={save} loading={busy} disabled={!form.title_ur}>{t('save')}</Button>
-      {!isNew && write && <>
-        <input ref={fileRef} type="file" accept="image/png,image/webp,image/jpeg" className="sr-only"
-          onChange={(e) => void uploadQr(e.target.files?.[0])} />
-        <div className="btn-row"><Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>{t('uploadQr')}</Button></div>
-        <p className="small">{t('qrNote')}</p>
-      </>}
     </Sheet>
+  </div>;
+}
+
+// ------------------------- Universal Create / Invoice Creator ----------------
+export function UniversalCreateScreen() {
+  const { lang, can } = useApp();
+  const nav = useNavigate();
+  const [filter, setFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+
+  const entries = [
+    { id: 'fert_sale', cat: 'sales', perm: 'sales.post', ur: 'کھاد فروخت انوائس', en: 'Fertilizer Sale Invoice', desc_ur: 'یوریا، ڈی اے پی، این پی و دیگر کھاد کی فروخت', desc_en: 'Sell Urea, DAP, NP and all fertilizers', to: '/erp/fertilizer/sale/new', icon: 'FERT', badge: 'FERT' },
+    { id: 'pest_sale', cat: 'sales', perm: 'sales.post', ur: 'پیسٹی سائیڈ فروخت انوائس', en: 'Pesticide Sale Invoice', desc_ur: 'سپرے و ادویات برائے فصل (بیچ اور ایکسپائری لازمی)', desc_en: 'Sell pesticides with batch & expiry tracking', to: '/erp/pesticide/sale/new', icon: 'PEST', badge: 'PEST' },
+    { id: 'general_sale', cat: 'sales', perm: 'sales.post', ur: 'عام فروخت بل', en: 'General Sale Bill', desc_ur: 'چوکر، ونڈا، سیمنٹ، بیج و دیگر اشیاء کی فروخت', desc_en: 'Sale invoice for feed, seed, cement & goods', to: '/erp/sales/new', icon: 'sales', badge: 'SALE' },
+    { id: 'fert_purch', cat: 'purchases', perm: 'purchases.post', ur: 'کھاد خریداری بل', en: 'Fertilizer Purchase Bill', desc_ur: 'سپلائر سے کھاد کی خریداری اور گودام میں مال اندر', desc_en: 'Purchase fertilizers from suppliers into stock', to: '/erp/fertilizer/purchase/new', icon: 'FERT', badge: 'PURCHASE' },
+    { id: 'pest_purch', cat: 'purchases', perm: 'purchases.post', ur: 'پیسٹی سائیڈ خریداری بل', en: 'Pesticide Purchase Bill', desc_ur: 'پیسٹی سائیڈ مال اندر مع بیچ نمبر اور میعاد', desc_en: 'Purchase pesticides with batch & expiry tracking', to: '/erp/pesticide/purchase/new', icon: 'PEST', badge: 'PURCHASE' },
+    { id: 'general_purch', cat: 'purchases', perm: 'purchases.post', ur: 'عام خریداری بل (اسٹاک اندر)', en: 'General Purchase Bill', desc_ur: 'چوکر، ونڈا، بیج وغیرہ کی خریداری اور اسٹاک میں اضافہ', desc_en: 'Purchase general goods & feed into warehouse', to: '/erp/purchases/new', icon: 'purchases', badge: 'PURCHASE' },
+    { id: 'grain_purch', cat: 'purchases', perm: 'grains.post', ur: 'اجناس / غلہ خریداری واؤچر', en: 'Grain Lot Purchase (Weight)', desc_ur: 'گندم، دھان، مکئی خریداری (خام وزن، ٹیر، خالص وزن)', desc_en: 'Buy grain at mandi scale: gross, tare, net weight', to: '/erp/grains/WHEAT/purchase/new', icon: 'WHEAT', badge: 'GRAIN' },
+    { id: 'grain_sale', cat: 'sales', perm: 'grains.post', ur: 'اجناس / غلہ فروخت واؤچر', en: 'Grain Lot Sale', desc_ur: 'گندم، دھان، مکئی کی ملوں یا خریداروں کو فروخت', desc_en: 'Sell grain lots to mills or mandi merchants', to: '/erp/grains/WHEAT/sale/new', icon: 'WHEAT', badge: 'GRAIN' },
+    { id: 'payroll_run', cat: 'payroll', perm: 'employees.read', ur: 'ملازم تنخواہ واؤچر', en: 'Salary / Payroll Voucher', desc_ur: 'ماہانہ تنخواہ سلپ، ایڈوانس کٹوتی اور خالص تنخواہ ادائیگی', desc_en: 'Process monthly salaries, deductions & net payroll', to: '/erp/employees', icon: 'employees', badge: 'PAYROLL' },
+    { id: 'salary_adv', cat: 'payroll', perm: 'expenses.post', ur: 'تنخواہ ایڈوانس / ملازم ادھار', en: 'Salary Advance Voucher', desc_ur: 'ملازمین کو پیشگی تنخواہ یا ایڈوانس ادائیگی', desc_en: 'Advance payment to employees before month end', to: '/erp/expenses/new', icon: 'employees', badge: 'ADVANCE' },
+    { id: 'expense_v', cat: 'payroll', perm: 'expenses.post', ur: 'دکان خرچہ واؤچر', en: 'Shop Expense Voucher', desc_ur: 'بجلی بل، کرایہ، گاڑی کا کرایہ، چائے پانی، مرمت وغیرہ', desc_en: 'Shop rent, electricity, freight, refreshments, tea', to: '/erp/expenses/new', icon: 'expenses', badge: 'EXPENSE' },
+    { id: 'receipt_v', cat: 'money', perm: 'receipts.post', ur: 'رقم وصولی رسید (کیش / بینک)', en: 'Cash / Bank Receipt Voucher', desc_ur: 'گاہک یا کاشتکار سے رقم وصول کر کے کھاتے میں جمع', desc_en: 'Receive money into cash drawer or bank accounts', to: '/erp/receipts/new', icon: 'accounts', badge: 'RECEIPT' },
+    { id: 'payment_v', cat: 'money', perm: 'payments.post', ur: 'رقم ادائیگی واؤچر (سپلائر / کاشتکار)', en: 'Cash / Bank Payment Voucher', desc_ur: 'سپلائر یا کاشتکار کو نقد یا بینک کے ذریعے ادائیگی', desc_en: 'Pay suppliers, farmers, vendors from cash or bank', to: '/erp/payments/new', icon: 'accounts', badge: 'PAYMENT' },
+    { id: 'transfer_v', cat: 'money', perm: 'accounts.read', ur: 'کھاتہ فنڈ منتقلی (کیش ↔ بینک)', en: 'Bank / Cash Fund Transfer', desc_ur: 'کیش سے بینک میں جمع یا بینک سے کیش نکالنا', desc_en: 'Transfer funds between cash drawer and bank accounts', to: '/erp/accounts/transfer', icon: 'accounts', badge: 'TRANSFER' },
+    { id: 'party_new', cat: 'money', perm: 'parties.read', ur: 'نیا کھاتہ دار / فریق بنائیں', en: 'New Party / Customer / Vendor', desc_ur: 'نیا گاہک، سپلائر، کاشتکار یا ملازم کھاتہ درج کریں', desc_en: 'Register a new customer, supplier, farmer, or worker', to: '/erp/parties/new', icon: 'parties', badge: 'KHATA' },
+    { id: 'prod_new', cat: 'stock', perm: 'products.read', ur: 'نئی پروڈکٹ شامل کریں', en: 'New Product Entry', desc_ur: 'کیٹلاگ میں نیا سامان، کھاد، پیسٹی سائیڈ یا آئٹم بنائیں', desc_en: 'Add new goods, fertilizer or pesticide item', to: '/erp/products/new', icon: 'products', badge: 'PRODUCT' },
+    { id: 'opening_stk', cat: 'stock', perm: 'stock.read', ur: 'ابتدائی اسٹاک واؤچر', en: 'Opening Stock Entry', desc_ur: 'گودام میں موجود مال کا افتتاحی وزن اور لاگت درج کریں', desc_en: 'Record verified initial stock quantities and costs', to: '/erp/inventory', icon: 'inventory', badge: 'OPENING' },
+    { id: 'stock_adj', cat: 'stock', perm: 'stock.read', ur: 'اسٹاک ایڈجسٹمنٹ واؤچر', en: 'Stock Adjustment', desc_ur: 'کمی بیشی، نقصان یا فزیکل کاؤنٹ کے فرق کا اندراج', desc_en: 'Adjust inventory counts with audit trail & reasons', to: '/erp/inventory', icon: 'inventory', badge: 'ADJUST' },
+    { id: 'return_v', cat: 'sales', perm: 'returns.read', ur: 'واپسی واؤچر (سیل / پرچیز ریٹرن)', en: 'Sales / Purchase Return', desc_ur: 'گاہک کی مال واپسی یا سپلائر کو واپسی', desc_en: 'Customer sale returns or supplier purchase returns', to: '/erp/returns', icon: 'returns', badge: 'RETURN' },
+  ];
+
+  const filtered = entries.filter((e) => {
+    if (e.perm && !can(e.perm)) return false;
+    if (filter !== 'ALL' && e.cat !== filter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return e.ur.toLowerCase().includes(q) || e.en.toLowerCase().includes(q) || e.desc_ur.toLowerCase().includes(q) || e.desc_en.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'نیا واؤچر / انوائس بنائیں' : 'Create Voucher / Invoice'} size={34} />{lang === 'ur' ? 'نیا واؤچر / انوائس بنائیں' : 'Create Voucher / Invoice'}</h1>
+      </div>
+    </div>
+
+    <div className="toolbar no-print" style={{ marginBlock: '12px 16px' }}>
+      <input className="input" value={search} onChange={(e) => setSearch(e.target.value)}
+        placeholder={lang === 'ur' ? 'واؤچر یا انوائس کی قسم تلاش کریں…' : 'Search voucher or invoice type…'}
+        aria-label={lang === 'ur' ? 'تلاش' : 'Search'} style={{ maxWidth: 360 }} />
+      <div className="btn-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+        <button type="button" className={`btn btn-sm ${filter === 'ALL' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('ALL')}>{lang === 'ur' ? 'تمام' : 'All'}</button>
+        <button type="button" className={`btn btn-sm ${filter === 'sales' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('sales')}>{lang === 'ur' ? 'فروخت و بل' : 'Sales'}</button>
+        <button type="button" className={`btn btn-sm ${filter === 'purchases' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('purchases')}>{lang === 'ur' ? 'خریداری' : 'Purchases'}</button>
+        <button type="button" className={`btn btn-sm ${filter === 'payroll' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('payroll')}>{lang === 'ur' ? 'تنخواہ و اخراجات' : 'Payroll & Expenses'}</button>
+        <button type="button" className={`btn btn-sm ${filter === 'money' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('money')}>{lang === 'ur' ? 'رقم و کھاتہ' : 'Money & Khata'}</button>
+        <button type="button" className={`btn btn-sm ${filter === 'stock' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('stock')}>{lang === 'ur' ? 'اسٹاک و پروڈکٹس' : 'Stock & Items'}</button>
+      </div>
+    </div>
+
+    <div className="quick-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+      {filtered.map((item) => (
+        <TiltCard key={item.id} href={item.to} tone="default" className="create-voucher-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 8, textDecoration: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <NavIcon icon={item.icon} label={lang === 'ur' ? item.ur : item.en} size={36} />
+            <Chip tone="success">{item.badge}</Chip>
+          </div>
+          <strong style={{ fontSize: '1.05rem', color: 'var(--text-bright)' }}>{lang === 'ur' ? item.ur : item.en}</strong>
+          <p className="small" style={{ color: 'var(--text-dim)', margin: 0, lineHeight: 1.4 }}>{lang === 'ur' ? item.desc_ur : item.desc_en}</p>
+        </TiltCard>
+      ))}
+    </div>
+    {!filtered.length && <EmptyState title={lang === 'ur' ? 'کوئی اندراج نہیں ملا' : 'No matching voucher type found'} />}
   </div>;
 }

@@ -64,7 +64,6 @@ export function HeroCube({ faces, products, className = '' }: {
   const reduced = useReducedMotion();
   const items: CubeFace[] = products?.length ? cubeFaces(products) : toFaces(faces ?? HERO_CUBE);
   const [face, setFace] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const groupRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -73,7 +72,9 @@ export function HeroCube({ faces, products, className = '' }: {
   const angleRef = useRef(0);
   const dragDeg = useRef(0);
   const startX = useRef(0);
-  const frame = useRef(0);
+  const draggingRef = useRef(false);
+  const activeFaceRef = useRef(0);
+  const speedRef = useRef(38); // continuous 38 deg/sec for smooth noticeable 3D spinning
   const count = items.length || 1;
 
   /** The one place rotation is applied: the body's CSS var, plus per-face lighting for depth.
@@ -91,6 +92,7 @@ export function HeroCube({ faces, products, className = '' }: {
   const stepForward = () => {
     angleRef.current -= STEP;
     const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    activeFaceRef.current = nextFace;
     setFace(nextFace);
     paint(angleRef.current);
   };
@@ -98,6 +100,7 @@ export function HeroCube({ faces, products, className = '' }: {
   const stepBackward = () => {
     angleRef.current += STEP;
     const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    activeFaceRef.current = nextFace;
     setFace(nextFace);
     paint(angleRef.current);
   };
@@ -110,17 +113,35 @@ export function HeroCube({ faces, products, className = '' }: {
     if (diff > count / 2) diff -= count;
     if (diff < -count / 2) diff += count;
     angleRef.current -= diff * STEP;
+    activeFaceRef.current = targetIndex;
     setFace(targetIndex);
     paint(angleRef.current);
   };
 
+  // Continuous auto-spinning loop at smooth 60fps/120fps via requestAnimationFrame
   useEffect(() => {
-    if (reduced || paused || dragging) return;
-    const iv = window.setInterval(stepForward, AUTO_MS);
-    return () => window.clearInterval(iv);
-  }, [reduced, paused, dragging, count]);
+    if (reduced) return;
+    let animId: number;
+    let lastTime = performance.now();
+    const tick = (time: number) => {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      if (!draggingRef.current) {
+        angleRef.current -= speedRef.current * dt;
+        paint(angleRef.current);
+        const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+        if (nextFace !== activeFaceRef.current) {
+          activeFaceRef.current = nextFace;
+          setFace(nextFace);
+        }
+      }
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [reduced, count]);
 
-  // Initial paint and resize sync
+  // Initial paint
   useEffect(() => { paint(angleRef.current); }, [items.length, reduced]);
 
   useEffect(() => {
@@ -139,48 +160,43 @@ export function HeroCube({ faces, products, className = '' }: {
     return () => document.removeEventListener('keydown', onKey);
   }, [count]);
 
-  useEffect(() => () => { if (frame.current) window.cancelAnimationFrame(frame.current); }, []);
-
   const onDown = (ev: ReactPointerEvent<HTMLDivElement>) => {
     if (ev.button) return;
     startX.current = ev.clientX;
     dragDeg.current = 0;
+    draggingRef.current = true;
     setDragging(true);
     // Mouse and pen may capture; a touch must not — capturing touch blocks scrolling past the hero.
     if (ev.pointerType !== 'touch') stageRef.current?.setPointerCapture?.(ev.pointerId);
   };
 
   const onMove = (ev: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragging) return;
+    if (!draggingRef.current) return;
     dragDeg.current = (ev.clientX - startX.current) * DRAG_SENSITIVITY;
-    if (frame.current) return;
-    frame.current = window.requestAnimationFrame(() => {
-      frame.current = 0;
-      paint(angleRef.current + dragDeg.current);
-    });
+    paint(angleRef.current + dragDeg.current);
   };
 
   const onUp = () => {
-    if (!dragging) return;
+    if (!draggingRef.current) return;
     angleRef.current += dragDeg.current;
-    // Snap cleanly to the nearest 90-degree step
-    angleRef.current = Math.round(angleRef.current / STEP) * STEP;
     dragDeg.current = 0;
+    draggingRef.current = false;
     setDragging(false);
     const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    activeFaceRef.current = nextFace;
     setFace(nextFace);
     paint(angleRef.current);
   };
 
   const current = items[face];
   const label = current ? (lang === 'ur' ? current.alt_ur : current.alt_en) : '';
-  // A product face already carries its own name and price inside the card, so the caption below the
-  // cube would repeat it — and the tilted face overhangs into that row. Captions stay for photo faces.
   const showCaption = items[0]?.kind === 'photo';
 
   return <div className={`cube ${className}`} ref={groupRef}
-    onPointerEnter={() => setPaused(true)} onPointerLeave={() => { setPaused(false); onUp(); }}
-    onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
+    onPointerEnter={() => { speedRef.current = 14; }}
+    onPointerLeave={() => { speedRef.current = 38; onUp(); }}
+    onFocus={() => { speedRef.current = 14; }}
+    onBlur={() => { speedRef.current = 38; }}
     tabIndex={0} role="group"
     aria-label={lang === 'ur' ? 'گھومتا 3D مصنوعات کیوب — تیر کے نشان سے گھمائیں' : 'Rotating 3D product cube — use arrow keys to turn'}>
     <div className="cube-glow" aria-hidden="true" />

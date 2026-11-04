@@ -8,7 +8,7 @@ import React from 'react';
 export type MarkKind =
   | 'warn' | 'check' | 'check-circle' | 'x' | 'ban' | 'info'
   | 'sync' | 'print' | 'share' | 'download' | 'lock' | 'key' | 'search'
-  | 'menu' | 'plus' | 'user' | 'tray' | 'status' | 'arrow' | 'clock' | 'mail' | 'pin';
+  | 'menu' | 'plus' | 'user' | 'tray' | 'status' | 'arrow' | 'clock' | 'mail' | 'pin' | 'phone';
 
 export function Mark({ kind, className = '' }: { kind: MarkKind; className?: string }) {
   return <span className={`mark mark-${kind} ${className}`.trim()} aria-hidden="true" />;

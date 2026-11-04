@@ -15,7 +15,7 @@ export const HERO_CUBE: PhotoRef[] = [
   photo('products/product-wanda-1', 'ونڈا کی تھیلی', 'Cotton seed (wanda) bag'),
 ];
 
-export const HERO_BG = photo('hero/hero-bg', 'خریفی میدان', 'Agricultural fields');
+export const HERO_BG = photo('hero/hero-wheat', 'سنہرے گندم کے کھیت', 'Golden wheat fields');
 export const HERO_WHEAT = photo('hero/hero-wheat', 'سنتے ہوئے گندم کے کھیت', 'Ripening wheat field');
 
 /** Keyed by the seeded `product_categories.code`, with `slug` accepted as an alias. */

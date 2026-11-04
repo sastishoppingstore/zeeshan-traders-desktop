@@ -17,7 +17,7 @@ import {
   PartyKhata, ReportsGallery, DocumentsCentre, SyncCentre, BackupScreen, SettingsScreen,
   AuditScreen, StatusScreen, WebsiteCms, EnquiriesInbox, AccountingScreen, UsersScreen,
   InventoryScreen, AccountsHub, AccountPage, EmployeesScreen, ReturnsScreen,
-  OrdersScreen, PaymentMethodsScreen,
+  OrdersScreen, PaymentMethodsScreen, UniversalCreateScreen,
 } from './erpScreens.js';
 import { DocumentForm, GrainForm, SimpleForm } from './erpForms.js';
 
@@ -25,6 +25,7 @@ type NavItem = { to: string; ur: string; en: string; icon: string; perm?: string
 const NAV_GROUPS: { group: string; group_en: string; items: NavItem[] }[] = [
   { group: 'مرکزی', group_en: 'Main', items: [
     { to: '/erp', ur: 'ڈیش بورڈ', en: 'Dashboard', icon: 'dashboard', perm: 'dashboard.view' },
+    { to: '/erp/create', ur: 'نیا اندراج / واؤچر', en: 'New Voucher / Invoice', icon: 'documents', perm: 'sales.read' },
     { to: '/erp/sales', ur: 'فروخت', en: 'Sales', icon: 'sales', perm: 'sales.read' },
     { to: '/erp/purchases', ur: 'خرید', en: 'Purchases', icon: 'purchases', perm: 'purchases.read' },
     { to: '/erp/inventory', ur: 'اسٹاک', en: 'Inventory', icon: 'inventory', perm: 'stock.read' },
@@ -84,6 +85,10 @@ const QUICK_TILES = [
   { label: 'رقم وصول', en: 'Receive Money', kind: 'receipt', book: '', perm: 'receipts.post' },
   { label: 'رقم ادا', en: 'Pay Money', kind: 'payment', book: '', perm: 'payments.post' },
   { label: 'خرچہ', en: 'Expense', kind: 'expense', book: '', perm: 'expenses.post' },
+  { label: 'تنخواہ واؤچر', en: 'Salary / Payroll', kind: 'payroll', book: '', perm: 'employees.read' },
+  { label: 'رقم منتقلی', en: 'Transfer Money', kind: 'transfer', book: '', perm: 'accounts.read' },
+  { label: 'نئی پروڈکٹ', en: 'New Product', kind: 'product', book: '', perm: 'products.read' },
+  { label: 'نیا فریق', en: 'New Party', kind: 'party', book: '', perm: 'parties.read' },
 ] as const;
 
 function TopBar({ title }: { title: string }) {
@@ -92,6 +97,8 @@ function TopBar({ title }: { title: string }) {
   const [search, setSearch] = useState(false);
   const pin = usePinState();
   const nav = useNavigate();
+  const loc = useLocation();
+  const canGoBack = loc.pathname !== '/erp';
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearch(true); }
@@ -102,10 +109,25 @@ function TopBar({ title }: { title: string }) {
   const state = !online ? (lang === 'ur' ? 'آف لائن' : 'Offline') : conflicts ? (lang === 'ur' ? `${conflicts} تضاد` : `${conflicts} conflicts`) : syncing ? (lang === 'ur' ? 'سنک ہو رہا ہے' : 'Syncing...') : pending ? (lang === 'ur' ? `${pending} باقی` : `${pending} pending`) : (lang === 'ur' ? 'سنک شدہ' : 'Synced');
   return <>
     <header className="erp-topbar">
+      {canGoBack && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm no-print erp-back-btn"
+          onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Go back'}
+          title={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}
+        >
+          <span className="back-arrow" aria-hidden="true">{lang === 'ur' ? '›' : '‹'}</span>
+          <span className="back-text">{lang === 'ur' ? 'واپس' : 'Back'}</span>
+        </button>
+      )}
       <Link to="/" className="brand" style={{ display: 'flex', gap: 8, alignItems: 'center' }} aria-label={lang === 'ur' ? 'عوامی ویب سائٹ' : 'Public Website'}>
         <img src="/icons/icon-192.png" alt="" width={32} height={32} style={{ borderRadius: 6 }} />
       </Link>
       <div className="title">{title}</div>
+      <Link to="/erp/create" className="btn btn-primary btn-sm no-print" style={{ marginInline: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }} aria-label={lang === 'ur' ? 'نیا واؤچر / انوائس' : 'New Voucher / Invoice'} title={lang === 'ur' ? 'نیا واؤچر / انوائس' : 'New Voucher / Invoice'}>
+        <Mark kind="plus" /> <span className="topbar-btn-text">{lang === 'ur' ? 'نیا واؤچر' : '+ Create'}</span>
+      </Link>
       <button className="btn btn-ghost btn-sm no-print" onClick={() => setSearch(true)} aria-label={lang === 'ur' ? 'تلاش' : 'Search'}><Mark kind="search" /></button>
       <button className={`chip ${online ? (conflicts ? 'danger' : 'success') : 'warning'}`} onClick={() => nav('/erp/sync')}
         title="Sync Centre" style={{ cursor: 'pointer', border: 'none' }}>{state}</button>
@@ -141,6 +163,10 @@ function QuickSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     else if (k === 'grain') nav('/erp/grains');
     else if (k === 'receipt') nav('/erp/receipts/new');
     else if (k === 'payment') nav('/erp/payments/new');
+    else if (k === 'payroll') nav('/erp/employees');
+    else if (k === 'transfer') nav('/erp/accounts/transfer');
+    else if (k === 'product') nav('/erp/products/new');
+    else if (k === 'party') nav('/erp/parties/new');
     else nav('/erp/expenses/new');
   };
   return <Sheet open={open} onClose={onClose} title={lang === 'ur' ? 'نیا اندراج / تیز اندراج' : 'Quick / New Entry'}>
@@ -366,9 +392,13 @@ export function ErpApp() {
     <Route index element={<Dashboard />} />
     <Route path="login" element={<Login />} />
     <Route path="setup" element={<Setup />} />
+    <Route path="create" element={<UniversalCreateScreen />} />
+    <Route path="invoices/new" element={<UniversalCreateScreen />} />
     <Route path="more" element={<MoreScreen />} />
     <Route path="sales" element={<GenericList config={LIST_CONFIG.sales} />} />
+    <Route path="sales/new" element={<DocumentForm kind="sale" book="FERT" />} />
     <Route path="purchases" element={<GenericList config={LIST_CONFIG.purchases} />} />
+    <Route path="purchases/new" element={<DocumentForm kind="purchase" book="FERT" />} />
     <Route path="products" element={<GenericList config={LIST_CONFIG.products} />} />
     <Route path="products/new" element={<ProductForm />} />
     <Route path="products/:id" element={<ProductForm />} />
@@ -443,10 +473,20 @@ export const LIST_CONFIG: Record<string, any> = {
   sales: { title: 'فروخت', title_en: 'Sales', endpoint: '/api/v1/sales', columns: [
     { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
     { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true },
-    { key: 'status', label: 'حالت', label_en: 'Status' }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}` },
+    { key: 'status', label: 'حالت', label_en: 'Status' }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}`,
+    actions: [
+      { label: '+ نئی فروخت', label_en: '+ New Sale', to: '/erp/sales/new' },
+      { label: '+ کھاد فروخت', label_en: '+ Fertilizer Sale', to: '/erp/fertilizer/sale/new' },
+      { label: '+ پیسٹی فروخت', label_en: '+ Pesticide Sale', to: '/erp/pesticide/sale/new' },
+    ] },
   purchases: { title: 'خرید', title_en: 'Purchases', endpoint: '/api/v1/purchases', columns: [
     { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
-    { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true }], detail: (r: any) => `/erp/documents?type=PURCHASE&q=${r.number}` },
+    { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true }], detail: (r: any) => `/erp/documents?type=PURCHASE&q=${r.number}`,
+    actions: [
+      { label: '+ نئی خرید', label_en: '+ New Purchase', to: '/erp/purchases/new' },
+      { label: '+ کھاد خرید', label_en: '+ Fertilizer Purchase', to: '/erp/fertilizer/purchase/new' },
+      { label: '+ پیسٹی خرید', label_en: '+ Pesticide Purchase', to: '/erp/pesticide/purchase/new' },
+    ] },
   products: { title: 'مصنوعات', title_en: 'Products', endpoint: '/api/v1/products', columns: [
     { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'sku', label: 'SKU', label_en: 'SKU' }, { key: 'category_ur', label: 'زمرہ', label_en: 'Category' },
     { key: 'stock_milli', label: 'اسٹاک', label_en: 'Stock', qty: true }, { key: 'sale_rate_paisa', label: 'ریٹ', label_en: 'Rate', money: true },
@@ -528,8 +568,9 @@ export const FORM_CONFIG: Record<string, any> = {
   ] },
   employee: { title: 'ملازم', title_en: 'Employee', endpoint: '/api/v1/employees', back: '/erp/employees', fields: [
     { name: 'name', label: 'نام', label_en: 'Name', type: 'text', required: true },
-    { name: 'role', label: 'عہدہ', type: 'text' }, { name: 'phone', label: 'موبائل', type: 'text' },
-    { name: 'join_date', label: 'تاریخِ ملازمت', type: 'date', required: true },
-    { name: 'base_salary_paisa', label: 'تنخواہ', type: 'money' },
+    { name: 'role', label: 'عہدہ', label_en: 'Designation / Role', type: 'text' },
+    { name: 'phone', label: 'موبائل', label_en: 'Mobile / Phone', type: 'text' },
+    { name: 'join_date', label: 'تاریخِ ملازمت', label_en: 'Joining Date', type: 'date', required: true },
+    { name: 'base_salary_paisa', label: 'تنخواہ', label_en: 'Base Salary', type: 'money' },
   ] },
 };

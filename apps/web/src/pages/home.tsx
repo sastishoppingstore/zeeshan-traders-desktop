@@ -15,15 +15,16 @@ import { GoldDust } from '../ui/particles.js';
 import { Reveal, useParallax, useTilt, Marquee } from '../ui/motion.js';
 import { MediaTile, SectionHead, Eyebrow, TiltCard } from '../ui/cards.js';
 import { Photo } from '../ui/photo.js';
+import { Mark } from '../ui/marks.js';
 import { ProductCard, waLink } from './products.js';
 
 /** The eight headline categories from the brief, in display order. */
 const HEADLINE_CODES = ['FERT', 'PEST', 'CHOK', 'WAND', 'CEM', 'SEED', 'OTHR', 'GRAINS'];
 
 const WHY = [
-  { photo: 'about/about-weighing', ur: 'ناپ تول میں دیسی ایمانداری', en: 'Honest weights, every time',
-    body_ur: 'فی تول پیمانے پر وزن، کچے بخاری اور پرچہ — وہی حساب جو دکان پر دیا جاتا ہے۔',
-    body_en: 'Weighed on the shop scale, with a printed slip for every load.' },
+  { photo: 'about/about-weighing', ur: 'ناپ تول میں مکمل شفافیت اور دیانت داری', en: 'Accurate weights, guaranteed',
+    body_ur: 'فی تول پیمانے پر خالص وزن، تصدیق شدہ پرچہ اور مکمل شفاف حساب۔',
+    body_en: 'Weighed on the shop scale, with a verified printed slip for every load.' },
   { photo: 'categories/cat-fertilizer', ur: 'درجہ بند کمپنی کا اصل مال', en: 'Sealed, genuine brands',
     body_ur: 'کھاد، پیسٹی سائیڈ اور بیج بند پیکٹ میں، لیبل اور ایکسپائری نمبر کے ساتھ۔',
     body_en: 'Fertilizer, pesticide and seed in factory-sealed packs with batch and expiry.' },
@@ -290,29 +291,84 @@ export function Home() {
           </div></Reveal>)}
       </section>}
 
-      <section className="section">
-        <div className="band">
-          <GoldDust count={10} />
-          <div className="band-grid">
+      <section className="section contact-section">
+        <div className="contact-3d-shell">
+          <GoldDust count={14} />
+          <div className="contact-head-row">
             <Reveal>
-              <h2>{t('contact')}</h2>
-              <p>{b.location_ur ?? BUSINESS_PROFILE.location_ur}</p>
-              <div className="btn-row">
-                <a className="btn btn-wa" href={b.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer">
-                  <span className="chat-mark" aria-hidden="true" />{t('whatsapp')}</a>
-                <Link className="btn btn-gold" to="/enquiry">{t('sendEnquiry')}</Link>
-              </div>
+              <SectionHead
+                kicker={<Eyebrow>{lang === 'ur' ? 'براہِ راست رابطہ' : 'Direct Contact'}</Eyebrow>}
+                title={lang === 'ur' ? 'ہم سے رابطہ کریں' : 'Get in Touch'}
+              />
+              <p className="contact-lead">
+                {lang === 'ur'
+                  ? `${bi(b.name_ur, b.name_en)} — مقصود چوک، ضلع لیہ، پنجاب۔ آرڈر، کھاتہ یا نرخ کے لیے بلا جھجھک رابطہ کریں۔`
+                  : `${bi(b.name_ur, b.name_en)} — Maqsood Chowk, District Layyah, Punjab. Reach out for rates, orders or khata.`}
+              </p>
             </Reveal>
-            <Reveal delay={80}>
-              <div className="kv">
-                <div><span className="k">{t('mobile')}</span><span className="v num">{b.phone1}</span></div>
-                <div><span className="k">{t('mobile')} 2</span><span className="v num">{b.phone2}</span></div>
-                <div><span className="k">{t('address')}</span><span className="v">{b.location_ur}</span></div>
-                <div><span className="k">{t('openInMaps')}</span>
-                  <span className="v"><a target="_blank" rel="noreferrer"
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('مقصود چوک لیہ پنجاب پاکستان')}`}>{t('openInMaps')}</a></span></div>
-              </div>
+          </div>
+
+          <div className="contact-3d-grid">
+            {/* Box 1: Phone 1 */}
+            <Reveal delay={40}>
+              <a href={`tel:${(b.phone1 ?? BUSINESS_PROFILE.phone1).replace(/-/g, '')}`} className="contact-3d-card"
+                aria-label={`${t('mobile')} 1: ${b.phone1 ?? BUSINESS_PROFILE.phone1}`}>
+                <div className="contact-card-top">
+                  <span className="contact-card-ico"><Mark kind="phone" /></span>
+                  <span className="contact-card-k">{t('mobile')} 1</span>
+                </div>
+                <strong className="contact-card-v num">{b.phone1 ?? BUSINESS_PROFILE.phone1}</strong>
+                <span className="contact-card-hint">{lang === 'ur' ? 'کال کرنے کے لیے کلک کریں ›' : 'Tap to call ›'}</span>
+              </a>
             </Reveal>
+
+            {/* Box 2: Phone 2 */}
+            <Reveal delay={70}>
+              <a href={`tel:${(b.phone2 ?? BUSINESS_PROFILE.phone2).replace(/-/g, '')}`} className="contact-3d-card"
+                aria-label={`${t('mobile')} 2: ${b.phone2 ?? BUSINESS_PROFILE.phone2}`}>
+                <div className="contact-card-top">
+                  <span className="contact-card-ico"><Mark kind="phone" /></span>
+                  <span className="contact-card-k">{t('mobile')} 2</span>
+                </div>
+                <strong className="contact-card-v num">{b.phone2 ?? BUSINESS_PROFILE.phone2}</strong>
+                <span className="contact-card-hint">{lang === 'ur' ? 'کال کرنے کے لیے کلک کریں ›' : 'Tap to call ›'}</span>
+              </a>
+            </Reveal>
+
+            {/* Box 3: WhatsApp */}
+            <Reveal delay={100}>
+              <a href={b.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer" className="contact-3d-card contact-3d-card-wa"
+                aria-label={`WhatsApp: ${b.phone1 ?? BUSINESS_PROFILE.phone1}`}>
+                <div className="contact-card-top">
+                  <span className="contact-card-ico"><span className="chat-mark" /></span>
+                  <span className="contact-card-k">WhatsApp</span>
+                </div>
+                <strong className="contact-card-v num">{b.phone1 ?? BUSINESS_PROFILE.phone1}</strong>
+                <span className="contact-card-hint">{lang === 'ur' ? 'واٹس ایپ پر میسج کریں ›' : 'Chat on WhatsApp ›'}</span>
+              </a>
+            </Reveal>
+
+            {/* Box 4: Address / Google Maps */}
+            <Reveal delay={130}>
+              <a target="_blank" rel="noreferrer"
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('مقصود چوک لیہ پنجاب پاکستان')}`}
+                className="contact-3d-card"
+                aria-label={`${t('address')}: ${b.location_ur ?? BUSINESS_PROFILE.location_ur}`}>
+                <div className="contact-card-top">
+                  <span className="contact-card-ico"><Mark kind="pin" /></span>
+                  <span className="contact-card-k">{t('address')}</span>
+                </div>
+                <strong className="contact-card-v">{b.location_ur ?? BUSINESS_PROFILE.location_ur}</strong>
+                <span className="contact-card-hint">{t('openInMaps')} ›</span>
+              </a>
+            </Reveal>
+          </div>
+
+          <div className="contact-cta-row">
+            <Link className="btn btn-gold btn-lg" to="/enquiry">{t('sendEnquiry')}</Link>
+            <a className="btn btn-wa btn-lg" href={b.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer">
+              <span className="chat-mark" aria-hidden="true" />{t('whatsapp')}
+            </a>
           </div>
         </div>
       </section>
