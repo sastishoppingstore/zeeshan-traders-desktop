@@ -28,8 +28,10 @@ const NAV_PHOTOS: Record<string, string> = {
 
 function NavPhoto({ name, active }: { name: string; active: boolean }) {
   const key = NAV_PHOTOS[name];
+  const asset = key ? (IMAGES as Record<string, any>)[key] : null;
+  const photo = asset?.sm ?? asset?.md;
   return <span className="nav-ico" aria-hidden="true">
-    {key && <img src={IMAGES[key as keyof typeof IMAGES].md} alt="" width={34} height={34} loading="lazy" />}
+    {photo && <img src={photo} alt="" width={34} height={34} loading="lazy" decoding="async" />}
     {active && <span className="nav-ico-ring" />}
   </span>;
 }
@@ -54,7 +56,7 @@ function Header({ business }: { business: any }) {
 
   return <header className={`pub-header glass${scrolled ? ' pub-header-scrolled' : ''}`}>
     <Link to="/" className="brand">
-      <span className="brand-mark"><img src={b.logo_url || '/brand/logo-96.png'} alt="" width={44} height={44} /></span>
+      <span className="brand-mark"><img src={b.logo_url || '/brand/logo-96.webp'} alt="" width={44} height={44} /></span>
       <span className="brand-text">
         {/* One name, in the reading language — the other script stays as the subtle sub-line. */}
         <strong>{bi(b.name_ur, b.name_en)}</strong>
@@ -125,7 +127,7 @@ function Footer({ business }: { business: any }) {
     <GoldDust count={8} />
     <div className="cols">
       <div>
-        <div className="footer-brand"><img src={b.logo_url || '/brand/logo-96.png'} alt="" width={40} height={40} loading="lazy" />
+        <div className="footer-brand"><img src={b.logo_url || '/brand/logo-96.webp'} alt="" width={40} height={40} loading="lazy" />
           <h2 style={{ fontSize: 18 }}>{shop}</h2></div>
         <p>{bi(b.location_ur, b.location_en)}</p>
         <p className="small">{t('siteTagline')}</p>
@@ -147,7 +149,11 @@ function Footer({ business }: { business: any }) {
       </div>
     </div>
     <div className="footer-photos">
-      {photos.map((key) => <img key={key} src={IMAGES[key].md} alt="" loading="lazy" width={120} height={120} />)}
+      {photos.map((key) => {
+        const asset = (IMAGES as Record<string, any>)[key];
+        const src = asset?.sm ?? asset?.md;
+        return <img key={key} src={src} alt="" loading="lazy" decoding="async" width={120} height={120} />;
+      })}
     </div>
     <p className="small center" style={{ marginBlockStart: 24 }}>© {shop} {new Date().getFullYear()}</p>
   </footer>;

@@ -128,4 +128,38 @@ export function registerWebsite(app: H) {
     return c.text(`User-agent: *\nAllow: /\nDisallow: /erp\nDisallow: /api/v1\nSitemap: ${origin}/sitemap.xml\n`, 200,
       { 'Cache-Control': 'public, max-age=86400' });
   });
+
+  // ------------------------- AI Agent Discovery: llms.txt & ARD manifest -------
+  app.get('/llms.txt', async (c) => {
+    const origin = new URL(c.req.url).origin;
+    const body = `# Zeeshan Traders
+
+> Agricultural dealership located at Maqsood Chowk, District Layyah, Punjab, Pakistan. Serving farmers and traders with certified fertilizers, pesticides, seeds, animal feeds, cement, and grains.
+
+## Main Resources
+- [Home](${origin}/): Storefront with product showcases, rates, and business information
+- [Products](${origin}/products): Catalogue of fertilizers, seeds, choker, wanda, cement, and grains
+- [Categories](${origin}/categories): Directory of all agricultural departments
+- [Public API](${origin}/api/v1/public/products): Public REST API endpoint for catalogue
+- [Enquiry](${origin}/enquiry): Order and rate inquiry form
+- [Contact](${origin}/contact): Location details, WhatsApp, and phone contacts
+`;
+    return c.text(body, 200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+  });
+
+  app.get('/.well-known/ard.json', async (c) => {
+    const origin = new URL(c.req.url).origin;
+    const manifest = {
+      $schema: 'https://agenticresource.org/schemas/ard-v1.json',
+      name: 'Zeeshan Traders',
+      description: 'Zeeshan Traders — Agricultural inputs and commodities dealership at Maqsood Chowk, District Layyah, Punjab, Pakistan',
+      url: origin,
+      resources: [
+        { name: 'Products API', type: 'api', url: `${origin}/api/v1/public/products` },
+        { name: 'Catalogue', type: 'webpage', url: `${origin}/products` },
+        { name: 'Categories', type: 'webpage', url: `${origin}/categories` },
+      ],
+    };
+    return c.json(manifest, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+  });
 }

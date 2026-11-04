@@ -19,6 +19,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'react';
           if (id.includes('node_modules/@tanstack')) return 'query';
+          if (id.includes('node_modules/@simplewebauthn')) return 'authn';
           return undefined;
         },
       },

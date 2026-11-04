@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agenticresource.org/schemas/ard-v1.json",
+  "name": "Zeeshan Traders",
+  "description": "Zeeshan Traders — Agricultural inputs and commodities dealership at Maqsood Chowk, District Layyah, Punjab, Pakistan",
+  "url": "https://zt-v2.sastishopping-store.workers.dev",
+  "resources": [
+    {
+      "name": "Products API",
+      "type": "api",
+      "url": "https://zt-v2.sastishopping-store.workers.dev/api/v1/public/products"
+    },
+    {
+      "name": "Catalogue",
+      "type": "webpage",
+      "url": "https://zt-v2.sastishopping-store.workers.dev/products"
+    },
+    {
+      "name": "Categories",
+      "type": "webpage",
+      "url": "https://zt-v2.sastishopping-store.workers.dev/categories"
+    }
+  ]
+}

@@ -21,34 +21,34 @@ import {
 } from './erpScreens.js';
 import { DocumentForm, GrainForm, SimpleForm } from './erpForms.js';
 
-type NavItem = { to: string; ur: string; en?: string; icon: string; perm?: string };
-const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
-  { group: 'مرکزی', items: [
+type NavItem = { to: string; ur: string; en: string; icon: string; perm?: string };
+const NAV_GROUPS: { group: string; group_en: string; items: NavItem[] }[] = [
+  { group: 'مرکزی', group_en: 'Main', items: [
     { to: '/erp', ur: 'ڈیش بورڈ', en: 'Dashboard', icon: 'dashboard', perm: 'dashboard.view' },
     { to: '/erp/sales', ur: 'فروخت', en: 'Sales', icon: 'sales', perm: 'sales.read' },
     { to: '/erp/purchases', ur: 'خرید', en: 'Purchases', icon: 'purchases', perm: 'purchases.read' },
     { to: '/erp/inventory', ur: 'اسٹاک', en: 'Inventory', icon: 'inventory', perm: 'stock.read' },
   ] },
-  { group: 'کاروباری کتابیں', items: BOOKS.filter((b) => b.kind === 'goods').map((b) => ({
+  { group: 'کاروباری کھاتے', group_en: 'Business Ledgers', items: BOOKS.filter((b) => b.kind === 'goods').map((b) => ({
     to: b.code === 'FERT' ? '/erp/fertilizer' : b.code === 'PEST' ? '/erp/pesticide' : `/erp/goods/${b.code}`,
     ur: b.ur, en: b.en, icon: b.code, perm: 'sales.read',
   })) },
-  { group: 'اجناس (7)', items: BOOKS.filter((b) => b.kind === 'grain').map((b) => ({
+  { group: 'اجناس (7)', group_en: 'Grains (7)', items: BOOKS.filter((b) => b.kind === 'grain').map((b) => ({
     to: `/erp/grains/${b.code}`, ur: b.ur, en: b.en, icon: b.code, perm: 'grains.read',
   })) },
-  { group: 'رقم اور کھاتہ', items: [
+  { group: 'رقم اور کھاتہ', group_en: 'Accounts & Khata', items: [
     { to: '/erp/khata', ur: 'کھاتہ', en: 'Khata', icon: 'khata', perm: 'khata.read' },
     { to: '/erp/accounts', ur: 'اکاؤنٹس', en: 'Accounts', icon: 'accounts', perm: 'accounts.read' },
     { to: '/erp/parties', ur: 'فریق', en: 'Parties', icon: 'parties', perm: 'parties.read' },
     { to: '/erp/expenses', ur: 'اخراجات', en: 'Expenses', icon: 'expenses', perm: 'expenses.read' },
     { to: '/erp/employees', ur: 'ملازمین', en: 'Employees', icon: 'employees', perm: 'employees.read' },
   ] },
-  { group: 'نظام', items: [
+  { group: 'نظام', group_en: 'System', items: [
     { to: '/erp/products', ur: 'مصنوعات', en: 'Products', icon: 'products', perm: 'products.read' },
-    { to: '/erp/catalogue/categories', ur: 'زمرے', en: 'Catalogue', icon: 'catalogue', perm: 'catalogue.read' },
+    { to: '/erp/catalogue/categories', ur: 'زمرے', en: 'Categories', icon: 'catalogue', perm: 'catalogue.read' },
     { to: '/erp/website', ur: 'ویب سائٹ', en: 'Website', icon: 'website', perm: 'cms.read' },
     { to: '/erp/orders', ur: 'آرڈرز', en: 'Orders', icon: 'orders', perm: 'orders.read' },
-    { to: '/erp/payment-methods', ur: 'ادائیگی کے طریقے', en: 'Payment methods', icon: 'payments', perm: 'payments.methods.write' },
+    { to: '/erp/payment-methods', ur: 'ادائیگی کے طریقے', en: 'Payment Methods', icon: 'payments', perm: 'payments.methods.write' },
     { to: '/erp/enquiries', ur: 'پوچھ گچھ', en: 'Enquiries', icon: 'enquiries', perm: 'enquiries.read' },
     { to: '/erp/documents', ur: 'دستاویزات', en: 'Documents', icon: 'documents', perm: 'documents.read' },
     { to: '/erp/reports', ur: 'رپورٹس', en: 'Reports', icon: 'reports', perm: 'reports.view' },
@@ -57,8 +57,8 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     { to: '/erp/sync', ur: 'سنک', en: 'Sync', icon: 'sync', perm: 'sync.read' },
     { to: '/erp/backup', ur: 'بیک اپ', en: 'Backup', icon: 'backup', perm: 'backup.read' },
     { to: '/erp/settings', ur: 'ترتیبات', en: 'Settings', icon: 'settings', perm: 'settings.read' },
-    { to: '/erp/audit', ur: 'آڈٹ لاگ', en: 'Audit', icon: 'audit', perm: 'audit.read' },
-    { to: '/erp/status', ur: 'سسٹم کی حالت', en: 'System status', icon: 'status', perm: 'dashboard.view' },
+    { to: '/erp/audit', ur: 'آڈٹ لاگ', en: 'Audit Log', icon: 'audit', perm: 'audit.read' },
+    { to: '/erp/status', ur: 'سسٹم کی حالت', en: 'System Status', icon: 'status', perm: 'dashboard.view' },
   ] },
 ];
 
@@ -68,22 +68,22 @@ function navGroups(can: (perm: string) => boolean) {
 }
 
 const BOTTOM_NAV: NavItem[] = [
-  { to: '/erp', ur: 'ڈیش بورڈ', icon: 'dashboard', perm: 'dashboard.view' },
-  { to: '/erp/sales', ur: 'فروخت', icon: 'sales', perm: 'sales.read' },
-  { to: '/erp/purchases', ur: 'خرید', icon: 'purchases', perm: 'purchases.read' },
-  { to: '/erp/khata', ur: 'کھاتہ', icon: 'khata', perm: 'khata.read' },
-  { to: '/erp/more', ur: 'مزید', icon: 'menu' },
+  { to: '/erp', ur: 'ڈیش بورڈ', en: 'Dashboard', icon: 'dashboard', perm: 'dashboard.view' },
+  { to: '/erp/sales', ur: 'فروخت', en: 'Sales', icon: 'sales', perm: 'sales.read' },
+  { to: '/erp/purchases', ur: 'خرید', en: 'Purchases', icon: 'purchases', perm: 'purchases.read' },
+  { to: '/erp/khata', ur: 'کھاتہ', en: 'Khata', icon: 'khata', perm: 'khata.read' },
+  { to: '/erp/more', ur: 'مزید', en: 'More', icon: 'menu' },
 ];
 
 const QUICK_TILES = [
-  { label: 'کھاد خرید', kind: 'purchase', book: 'FERT', perm: 'purchases.post' },
-  { label: 'کھاد فروخت', kind: 'sale', book: 'FERT', perm: 'sales.post' },
-  { label: 'پیسٹی خرید', kind: 'purchase', book: 'PEST', perm: 'purchases.post' },
-  { label: 'پیسٹی فروخت', kind: 'sale', book: 'PEST', perm: 'sales.post' },
-  { label: 'اجناس', kind: 'grain', book: 'WHEAT', perm: 'grains.read' },
-  { label: 'رقم وصول', kind: 'receipt', book: '', perm: 'receipts.post' },
-  { label: 'رقم ادا', kind: 'payment', book: '', perm: 'payments.post' },
-  { label: 'خرچہ', kind: 'expense', book: '', perm: 'expenses.post' },
+  { label: 'کھاد خرید', en: 'Fertilizer Purchase', kind: 'purchase', book: 'FERT', perm: 'purchases.post' },
+  { label: 'کھاد فروخت', en: 'Fertilizer Sale', kind: 'sale', book: 'FERT', perm: 'sales.post' },
+  { label: 'پیسٹی خرید', en: 'Pesticide Purchase', kind: 'purchase', book: 'PEST', perm: 'purchases.post' },
+  { label: 'پیسٹی فروخت', en: 'Pesticide Sale', kind: 'sale', book: 'PEST', perm: 'sales.post' },
+  { label: 'اجناس', en: 'Grains', kind: 'grain', book: 'WHEAT', perm: 'grains.read' },
+  { label: 'رقم وصول', en: 'Receive Money', kind: 'receipt', book: '', perm: 'receipts.post' },
+  { label: 'رقم ادا', en: 'Pay Money', kind: 'payment', book: '', perm: 'payments.post' },
+  { label: 'خرچہ', en: 'Expense', kind: 'expense', book: '', perm: 'expenses.post' },
 ] as const;
 
 function TopBar({ title }: { title: string }) {
@@ -99,33 +99,33 @@ function TopBar({ title }: { title: string }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
-  const state = !online ? 'آف لائن' : conflicts ? `${conflicts} تضاد` : syncing ? 'سنک ہو رہا ہے' : pending ? `${pending} باقی` : 'سنک شدہ';
+  const state = !online ? (lang === 'ur' ? 'آف لائن' : 'Offline') : conflicts ? (lang === 'ur' ? `${conflicts} تضاد` : `${conflicts} conflicts`) : syncing ? (lang === 'ur' ? 'سنک ہو رہا ہے' : 'Syncing...') : pending ? (lang === 'ur' ? `${pending} باقی` : `${pending} pending`) : (lang === 'ur' ? 'سنک شدہ' : 'Synced');
   return <>
     <header className="erp-topbar">
-      <Link to="/" className="brand" style={{ display: 'flex', gap: 8, alignItems: 'center' }} aria-label="عوامی ویب سائٹ">
+      <Link to="/" className="brand" style={{ display: 'flex', gap: 8, alignItems: 'center' }} aria-label={lang === 'ur' ? 'عوامی ویب سائٹ' : 'Public Website'}>
         <img src="/icons/icon-192.png" alt="" width={32} height={32} style={{ borderRadius: 6 }} />
       </Link>
       <div className="title">{title}</div>
-      <button className="btn btn-ghost btn-sm no-print" onClick={() => setSearch(true)} aria-label="تلاش"><Mark kind="search" /></button>
+      <button className="btn btn-ghost btn-sm no-print" onClick={() => setSearch(true)} aria-label={lang === 'ur' ? 'تلاش' : 'Search'}><Mark kind="search" /></button>
       <button className={`chip ${online ? (conflicts ? 'danger' : 'success') : 'warning'}`} onClick={() => nav('/erp/sync')}
         title="Sync Centre" style={{ cursor: 'pointer', border: 'none' }}>{state}</button>
-      <button className="btn btn-ghost btn-sm no-print" onClick={() => void syncNow()} aria-label="ابھی سنک کریں"><Mark kind="sync" /></button>
-      {pin.enabled && pin.unlocked && <button className="btn btn-ghost btn-sm no-print" onClick={() => { lockPin(); }} title="آف لائن کیش مقفل کریں" aria-label="کیش مقفل کریں"><Mark kind="lock" /></button>}
+      <button className="btn btn-ghost btn-sm no-print" onClick={() => void syncNow()} aria-label={lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}><Mark kind="sync" /></button>
+      {pin.enabled && pin.unlocked && <button className="btn btn-ghost btn-sm no-print" onClick={() => { lockPin(); }} title={lang === 'ur' ? 'آف لائن کیش مقفل کریں' : 'Lock Offline Cache'} aria-label={lang === 'ur' ? 'کیش مقفل کریں' : 'Lock Cache'}><Mark kind="lock" /></button>}
       <button className="btn btn-ghost btn-sm no-print" onClick={() => setLang(lang === 'ur' ? 'en' : 'ur')}>{lang === 'ur' ? 'EN' : 'UR'}</button>
-      <button className="btn btn-ghost btn-sm no-print" onClick={() => setMenu(!menu)} aria-label="صارف مینو"><Mark kind="user" /></button>
+      <button className="btn btn-ghost btn-sm no-print" onClick={() => setMenu(!menu)} aria-label={lang === 'ur' ? 'صارف مینو' : 'User Menu'}><Mark kind="user" /></button>
     </header>
     {menu && <div className="card" style={{ position: 'fixed', insetInlineEnd: 8, top: 58, zIndex: 45, minWidth: 210 }}>
       <div className="small">{session?.user.name}</div>
       <div className="small">{session?.user.roles.join(', ')}</div>
-      <Link className="btn btn-ghost btn-sm btn-block" to="/erp/settings">ترتیبات</Link>
-      <Link className="btn btn-ghost btn-sm btn-block" to="/erp/status">سسٹم کی حالت</Link>
-      <button className="btn btn-ghost btn-sm btn-block" onClick={() => void logout()}>لاگ آؤٹ</button>
+      <Link className="btn btn-ghost btn-sm btn-block" to="/erp/settings">{lang === 'ur' ? 'ترتیبات' : 'Settings'}</Link>
+      <Link className="btn btn-ghost btn-sm btn-block" to="/erp/status">{lang === 'ur' ? 'سسٹم کی حالت' : 'System Status'}</Link>
+      <button className="btn btn-ghost btn-sm btn-block" onClick={() => void logout()}>{lang === 'ur' ? 'لاگ آؤٹ' : 'Logout'}</button>
     </div>}
-    <Sheet open={search} onClose={() => setSearch(false)} title="عالمی تلاش (Ctrl+K)">
-      <TextField label="تلاش" value="" onChange={() => {}} placeholder="مصنوعات، فریق، دستاویز…" />
-      <div className="link-list"><Link to="/erp/products" onClick={() => setSearch(false)}>مصنوعات</Link>
-        <Link to="/erp/parties" onClick={() => setSearch(false)}>فریق</Link>
-        <Link to="/erp/documents" onClick={() => setSearch(false)}>دستاویزات</Link></div>
+    <Sheet open={search} onClose={() => setSearch(false)} title={lang === 'ur' ? 'عالمی تلاش (Ctrl+K)' : 'Global Search (Ctrl+K)'}>
+      <TextField label={lang === 'ur' ? 'تلاش' : 'Search'} value="" onChange={() => {}} placeholder={lang === 'ur' ? 'مصنوعات، فریق، دستاویز…' : 'Products, parties, documents...'} />
+      <div className="link-list"><Link to="/erp/products" onClick={() => setSearch(false)}>{lang === 'ur' ? 'مصنوعات' : 'Products'}</Link>
+        <Link to="/erp/parties" onClick={() => setSearch(false)}>{lang === 'ur' ? 'فریق' : 'Parties'}</Link>
+        <Link to="/erp/documents" onClick={() => setSearch(false)}>{lang === 'ur' ? 'دستاویزات' : 'Documents'}</Link></div>
       <div className="notice info small">عالمی سرچ انڈیکس INCOMPLETE — اوپر کے روابط کام کرتے ہیں۔</div>
     </Sheet>
   </>;
@@ -133,7 +133,7 @@ function TopBar({ title }: { title: string }) {
 
 function QuickSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate();
-  const { can } = useApp();
+  const { can, lang } = useApp();
   const tiles = QUICK_TILES.filter((x) => can(x.perm));
   const go = (k: string, book: string) => {
     onClose();
@@ -143,21 +143,21 @@ function QuickSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     else if (k === 'payment') nav('/erp/payments/new');
     else nav('/erp/expenses/new');
   };
-  return <Sheet open={open} onClose={onClose} title="نیا اندراج / تیز اندراج">
+  return <Sheet open={open} onClose={onClose} title={lang === 'ur' ? 'نیا اندراج / تیز اندراج' : 'Quick / New Entry'}>
     <div className="quick-grid">{tiles.map((x) => <button key={x.label} className="tile" onClick={() => go(x.kind, x.book)}>
-      <span className="ico"><Mark kind="plus" /></span><strong>{x.label}</strong></button>)}</div>
+      <span className="ico"><Mark kind="plus" /></span><strong>{lang === 'ur' ? x.label : x.en}</strong></button>)}</div>
     {!tiles.length && <div className="notice small">اس صارف کے پاس اندراج پوسٹ کرنے کی اجازت نہیں — ڈیش بورڈ سے رپورٹس دیکھیں۔</div>}
     <div className="notice small" style={{ marginBlockStart: 12 }}>تیز اندراج: نام، تعداد، رقم اور نقد/ادھار — باقی تفصیلات اختیاری۔</div>
   </Sheet>;
 }
 
 function Sidebar() {
-  const { can } = useApp();
-  return <aside className="sidebar" aria-label="ERP روابط">
+  const { can, lang } = useApp();
+  return <aside className="sidebar" aria-label={lang === 'ur' ? 'ERP روابط' : 'ERP Navigation'}>
     {navGroups(can).map((g) => <React.Fragment key={g.group}>
-      <div className="group">{g.group}</div>
-      {g.items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/erp'} className={({ isActive }) => isActive ? 'active' : ''} title={i.en}>
-        <NavIcon icon={i.icon} label={i.ur} size={26} /><span className="label">{i.ur}</span>
+      <div className="group">{lang === 'ur' ? g.group : (g.group_en || g.group)}</div>
+      {g.items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/erp'} className={({ isActive }) => isActive ? 'active' : ''} title={lang === 'ur' ? i.ur : (i.en || i.ur)}>
+        <NavIcon icon={i.icon} label={lang === 'ur' ? i.ur : (i.en || i.ur)} size={26} /><span className="label">{lang === 'ur' ? i.ur : (i.en || i.ur)}</span>
       </NavLink>)}
     </React.Fragment>)}
   </aside>;
@@ -166,22 +166,30 @@ function Sidebar() {
 function Shell({ children }: { children: React.ReactNode }) {
   const [quick, setQuick] = useState(false);
   const loc = useLocation();
-  const { can } = useApp();
+  const { can, lang } = useApp();
   const title = useMemo(() => {
-    for (const g of NAV_GROUPS) for (const i of g.items) if (loc.pathname.startsWith(i.to) && i.to !== '/erp') return i.ur;
-    if (loc.pathname.includes('/new') || loc.pathname.includes('/import')) return 'نیا اندراج';
-    return 'ڈیش بورڈ';
-  }, [loc.pathname]);
+    for (const g of NAV_GROUPS) {
+      for (const i of g.items) {
+        if (loc.pathname === i.to || (i.to !== '/erp' && loc.pathname.startsWith(i.to))) {
+          return lang === 'ur' ? i.ur : (i.en || i.ur);
+        }
+      }
+    }
+    if (loc.pathname.includes('/new') || loc.pathname.includes('/import')) {
+      return lang === 'ur' ? 'نیا اندراج' : 'New Entry';
+    }
+    return lang === 'ur' ? 'ڈیش بورڈ' : 'Dashboard';
+  }, [loc.pathname, lang]);
   return <div className="erp-shell">
     <div className="erp-main">
       <TopBar title={title} /><OfflineBanner />
       <main className="erp-content" id="main">{children}</main>
-      <nav className="erp-bottom-nav" aria-label="نیچے والی نیویگیشن">
+      <nav className="erp-bottom-nav" aria-label={lang === 'ur' ? 'نیچے والی نیویگیشن' : 'Bottom Navigation'}>
         {BOTTOM_NAV.filter((i) => !i.perm || can(i.perm)).map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/erp'} className={({ isActive }) => isActive ? 'active' : ''}>
-          {i.icon === 'menu' ? <span className="ico"><Mark kind="menu" /></span> : <NavIcon icon={i.icon} label={i.ur} size={30} />}
-          <span>{i.ur}</span></NavLink>)}
+          {i.icon === 'menu' ? <span className="ico"><Mark kind="menu" /></span> : <NavIcon icon={i.icon} label={lang === 'ur' ? i.ur : (i.en || i.ur)} size={30} />}
+          <span>{lang === 'ur' ? i.ur : (i.en || i.ur)}</span></NavLink>)}
       </nav>
-      {QUICK_TILES.some((x) => can(x.perm)) && <button className="fab" onClick={() => setQuick(true)} aria-label="نیا اندراج">+</button>}
+      {QUICK_TILES.some((x) => can(x.perm)) && <button className="fab" onClick={() => setQuick(true)} aria-label={lang === 'ur' ? 'نیا اندراج' : 'New Entry'}>+</button>}
       <QuickSheet open={quick} onClose={() => setQuick(false)} />
     </div>
     <Sidebar />
@@ -208,7 +216,7 @@ function Login() {
     <GoldDust count={14} />
     <div className="login-side">
       <Reveal>
-        <img className="login-mark" src="/brand/logo-96.png" alt="ذیشان ٹریڈرز کا نشان" width={64} height={64} />
+        <img className="login-mark" src="/brand/logo-96.webp" alt="ذیشان ٹریڈرز کا نشان" width={64} height={64} />
         <h1 className="h-nastaliq">ذیشان ٹریڈرز</h1>
         <p className="login-tag">کھاد، اجناس اور کھاتہ — مقصود چوک، ضلع لیہ</p>
       </Reveal>
@@ -331,9 +339,11 @@ function Setup() {
 }
 
 function MoreScreen() {
-  const { can } = useApp();
-  return <div><h1>مزید</h1><div className="link-list">
-    {navGroups(can).flatMap((g) => g.items).map((i) => <Link key={i.to} to={i.to}>{i.icon} {i.ur} <span className="small">({i.en})</span></Link>)}
+  const { can, lang } = useApp();
+  return <div><h1>{lang === 'ur' ? 'مزید' : 'More'}</h1><div className="link-list">
+    {navGroups(can).flatMap((g) => g.items).map((i) => <Link key={i.to} to={i.to}>
+      <NavIcon icon={i.icon} label={lang === 'ur' ? i.ur : (i.en || i.ur)} size={22} /> {lang === 'ur' ? i.ur : (i.en || i.ur)} <span className="small">({lang === 'ur' ? i.en : i.ur})</span>
+    </Link>)}
   </div></div>;
 }
 
@@ -421,103 +431,103 @@ function CatalogueRoute() {
   return <GenericList config={LIST_CONFIG[kind] ?? LIST_CONFIG.categories} />;
 }
 function GrainsHub() {
-  const { can, t } = useApp();
+  const { can, t, lang } = useApp();
   if (!can('grains.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><h1 className="head-icon"><NavIcon icon="grains" label="اجناس" size={34} />اجناس — سات الگ ماڈیول</h1>
+  return <div><h1 className="head-icon"><NavIcon icon="grains" label={lang === 'ur' ? 'اجناس' : 'Grains'} size={34} />{lang === 'ur' ? 'اجناس — سات الگ ماڈیول' : 'Grains — Seven Modules'}</h1>
     <div className="module-grid">{BOOKS.filter((b) => b.kind === 'grain').map((b) =>
       <Link key={b.code} className="module-tile" to={`/erp/grains/${b.code}`}>
-        <NavIcon icon={b.code} label={b.ur} size={40} /><strong>{b.ur}</strong><span className="small">{b.en}</span></Link>)}</div></div>;
+        <NavIcon icon={b.code} label={lang === 'ur' ? b.ur : (b.en || b.ur)} size={40} /><strong>{lang === 'ur' ? b.ur : (b.en || b.ur)}</strong><span className="small">{lang === 'ur' ? b.en : b.ur}</span></Link>)}</div></div>;
 }
 
 export const LIST_CONFIG: Record<string, any> = {
-  sales: { title: 'فروخت', endpoint: '/api/v1/sales', columns: [
-    { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'book_code', label: 'کتاب' },
-    { key: 'total_paisa', label: 'کل', money: true }, { key: 'due_paisa', label: 'بقایا', money: true },
-    { key: 'status', label: 'حالت' }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}` },
-  purchases: { title: 'خرید', endpoint: '/api/v1/purchases', columns: [
-    { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'book_code', label: 'کتاب' },
-    { key: 'total_paisa', label: 'کل', money: true }, { key: 'due_paisa', label: 'بقایا', money: true }], detail: (r: any) => `/erp/documents?type=PURCHASE&q=${r.number}` },
-  products: { title: 'مصنوعات', endpoint: '/api/v1/products', columns: [
-    { key: 'name_ur', label: 'نام' }, { key: 'sku', label: 'SKU' }, { key: 'category_ur', label: 'زمرہ' },
-    { key: 'stock_milli', label: 'اسٹاک', qty: true }, { key: 'sale_rate_paisa', label: 'ریٹ', money: true },
-    { key: 'is_published', label: 'ویب' }], detail: (r: any) => `/erp/products/${r.id}`,
-    actions: [{ label: '+ نئی مصنوعات', to: '/erp/products/new' }, { label: 'CSV درآمد', to: '/erp/products/import' }] },
-  parties: { title: 'فریق', endpoint: '/api/v1/parties', columns: [
-    { key: 'name_ur', label: 'نام' }, { key: 'phone', label: 'موبائل' }, { key: 'type', label: 'قسم' },
-    { key: 'balance_paisa', label: 'بیلنس', money: true }], detail: (r: any) => `/erp/parties/${r.id}`,
-    actions: [{ label: '+ نیا فریق', to: '/erp/parties/new' }] },
-  expenses: { title: 'اخراجات', endpoint: '/api/v1/expenses', columns: [
-    { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' }, { key: 'category_ur', label: 'زمرہ' },
-    { key: 'amount_paisa', label: 'رقم', money: true }, { key: 'vendor', label: 'وینڈر' }],
-    actions: [{ label: '+ نیا خرچہ', to: '/erp/expenses/new' }] },
-  categories: { title: 'زمرے', endpoint: '/api/v1/categories', columns: [
-    { key: 'name_ur', label: 'نام' }, { key: 'code', label: 'کوڈ' }, { key: 'slug', label: 'Slug' },
-    { key: 'book_code', label: 'کتاب' }, { key: 'is_active', label: 'فعال' }],
+  sales: { title: 'فروخت', title_en: 'Sales', endpoint: '/api/v1/sales', columns: [
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
+    { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true },
+    { key: 'status', label: 'حالت', label_en: 'Status' }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}` },
+  purchases: { title: 'خرید', title_en: 'Purchases', endpoint: '/api/v1/purchases', columns: [
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
+    { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true }], detail: (r: any) => `/erp/documents?type=PURCHASE&q=${r.number}` },
+  products: { title: 'مصنوعات', title_en: 'Products', endpoint: '/api/v1/products', columns: [
+    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'sku', label: 'SKU', label_en: 'SKU' }, { key: 'category_ur', label: 'زمرہ', label_en: 'Category' },
+    { key: 'stock_milli', label: 'اسٹاک', label_en: 'Stock', qty: true }, { key: 'sale_rate_paisa', label: 'ریٹ', label_en: 'Rate', money: true },
+    { key: 'is_published', label: 'ویب', label_en: 'Web' }], detail: (r: any) => `/erp/products/${r.id}`,
+    actions: [{ label: '+ نئی مصنوعات', label_en: '+ New Product', to: '/erp/products/new' }, { label: 'CSV درآمد', label_en: 'Import CSV', to: '/erp/products/import' }] },
+  parties: { title: 'فریق', title_en: 'Parties', endpoint: '/api/v1/parties', columns: [
+    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'phone', label: 'موبائل', label_en: 'Phone' }, { key: 'type', label: 'قسم', label_en: 'Type' },
+    { key: 'balance_paisa', label: 'بیلنس', label_en: 'Balance', money: true }], detail: (r: any) => `/erp/parties/${r.id}`,
+    actions: [{ label: '+ نیا فریق', label_en: '+ New Party', to: '/erp/parties/new' }] },
+  expenses: { title: 'اخراجات', title_en: 'Expenses', endpoint: '/api/v1/expenses', columns: [
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'category_ur', label: 'زمرہ', label_en: 'Category' },
+    { key: 'amount_paisa', label: 'رقم', label_en: 'Amount', money: true }, { key: 'vendor', label: 'وینڈر', label_en: 'Vendor' }],
+    actions: [{ label: '+ نیا خرچہ', label_en: '+ New Expense', to: '/erp/expenses/new' }] },
+  categories: { title: 'زمرے', title_en: 'Categories', endpoint: '/api/v1/categories', columns: [
+    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'code', label: 'کوڈ', label_en: 'Code' }, { key: 'slug', label: 'Slug', label_en: 'Slug' },
+    { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' }, { key: 'is_active', label: 'فعال', label_en: 'Active' }],
     create: { endpoint: '/api/v1/categories', slugFromName: true, fields: [
       { name: 'name_ur', label: 'نام (اردو)' }, { name: 'name_en', label: 'English' },
       { name: 'code', label: 'کوڈ' }, { name: 'sort', label: 'ترتیب', type: 'number' }] } },
-  brands: { title: 'برانڈز', endpoint: '/api/v1/brands', columns: [
-    { key: 'name_ur', label: 'نام' }, { key: 'name_en', label: 'English' }, { key: 'is_active', label: 'فعال' }],
+  brands: { title: 'برانڈز', title_en: 'Brands', endpoint: '/api/v1/brands', columns: [
+    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'name_en', label: 'English', label_en: 'English' }, { key: 'is_active', label: 'فعال', label_en: 'Active' }],
     create: { endpoint: '/api/v1/brands', fields: [
       { name: 'name_ur', label: 'نام (اردو)' }, { name: 'name_en', label: 'English' }] } },
-  units: { title: 'یونٹ کنورژن', endpoint: '/api/v1/units', columns: [
-    { key: 'from_unit', label: 'سے' }, { key: 'to_unit', label: 'تک' }, { key: 'ratio_milli', label: 'تناسب', qty: true },
-    { key: 'confirmed', label: 'تصدیق' }],
+  units: { title: 'یونٹ کنورژن', title_en: 'Unit Conversions', endpoint: '/api/v1/units', columns: [
+    { key: 'from_unit', label: 'سے', label_en: 'From' }, { key: 'to_unit', label: 'تک', label_en: 'To' }, { key: 'ratio_milli', label: 'تناسب', label_en: 'Ratio', qty: true },
+    { key: 'confirmed', label: 'تصدیق', label_en: 'Confirmed' }],
     create: { endpoint: '/api/v1/units', extra: { confirmed: true }, fields: [
       { name: 'from_unit', label: 'سے' }, { name: 'to_unit', label: 'تک' },
       { name: 'ratio_milli', label: 'تناسب (1000 = 1:1)', type: 'number' }] } },
 };
 
 export const FORM_CONFIG: Record<string, any> = {
-  party: { title: 'نیا فریق', endpoint: '/api/v1/parties', back: '/erp/parties', fields: [
-    { name: 'name_ur', label: 'نام', type: 'text', required: true },
-    { name: 'phone', label: 'موبائل', type: 'text' }, { name: 'village', label: 'گاؤں / پتہ', type: 'text' },
-    { name: 'type', label: 'قسم', type: 'select', options: [
-      { value: 'CUSTOMER', label: 'گاہک' }, { value: 'SUPPLIER', label: 'سپلائر' },
-      { value: 'FARMER', label: 'کاشتکار' }, { value: 'EMPLOYEE', label: 'ملازم' }], required: true },
-    { name: 'opening_balance_paisa', label: 'ابتدائی بیلنس', type: 'money' },
-    { name: 'opening_direction', label: 'سمت', type: 'select', options: [
-      { value: 'RECEIVABLE', label: 'وہ ہمیں دیں گے' }, { value: 'PAYABLE', label: 'ہم نے دینے ہیں' }] },
-    { name: 'credit_limit_paisa', label: 'کریڈٹ حد', type: 'money' },
-    { name: 'notes', label: 'نوٹ', type: 'textarea' },
+  party: { title: 'نیا فریق', title_en: 'New Party', endpoint: '/api/v1/parties', back: '/erp/parties', fields: [
+    { name: 'name_ur', label: 'نام', label_en: 'Name', type: 'text', required: true },
+    { name: 'phone', label: 'موبائل', label_en: 'Phone', type: 'text' }, { name: 'village', label: 'گاؤں / پتہ', label_en: 'Address / Village', type: 'text' },
+    { name: 'type', label: 'قسم', label_en: 'Type', type: 'select', options: [
+      { value: 'CUSTOMER', label: 'گاہک', label_en: 'Customer' }, { value: 'SUPPLIER', label: 'سپلائر', label_en: 'Supplier' },
+      { value: 'FARMER', label: 'کاشتکار', label_en: 'Farmer' }, { value: 'EMPLOYEE', label: 'ملازم', label_en: 'Employee' }], required: true },
+    { name: 'opening_balance_paisa', label: 'ابتدائی بیلنس', label_en: 'Opening Balance', type: 'money' },
+    { name: 'opening_direction', label: 'سمت', label_en: 'Direction', type: 'select', options: [
+      { value: 'RECEIVABLE', label: 'وہ ہمیں دیں گے', label_en: 'Receivable' }, { value: 'PAYABLE', label: 'ہم نے دینے ہیں', label_en: 'Payable' }] },
+    { name: 'credit_limit_paisa', label: 'کریڈٹ حد', label_en: 'Credit Limit', type: 'money' },
+    { name: 'notes', label: 'نوٹ', label_en: 'Notes', type: 'textarea' },
   ] },
-  receipt: { title: 'رقم وصول', endpoint: '/api/v1/receipts', back: '/erp/khata', offline: true, fields: [
-    { name: 'date', label: 'تاریخ', type: 'date', required: true },
-    { name: 'party_id', label: 'گاہک', type: 'party', required: true },
-    { name: 'amount_paisa', label: 'رقم', type: 'money', required: true },
-    { name: 'account_id', label: 'اکاؤنٹ', type: 'account', required: true },
-    { name: 'reference', label: 'حوالہ / TID', type: 'text' },
-    { name: 'allocate', label: 'الاٹمنٹ', type: 'select', options: [
-      { value: 'AUTO', label: 'خودکار (پرانا پہلے)' }, { value: 'ADVANCE', label: 'ایڈوانس' }, { value: 'MANUAL', label: 'دستی' }] },
-    { name: 'note', label: 'نوٹ', type: 'textarea' },
+  receipt: { title: 'رقم وصول', title_en: 'Receive Money', endpoint: '/api/v1/receipts', back: '/erp/khata', offline: true, fields: [
+    { name: 'date', label: 'تاریخ', label_en: 'Date', type: 'date', required: true },
+    { name: 'party_id', label: 'گاہک', label_en: 'Customer', type: 'party', required: true },
+    { name: 'amount_paisa', label: 'رقم', label_en: 'Amount', type: 'money', required: true },
+    { name: 'account_id', label: 'اکاؤنٹ', label_en: 'Account', type: 'account', required: true },
+    { name: 'reference', label: 'حوالہ / TID', label_en: 'Reference / TID', type: 'text' },
+    { name: 'allocate', label: 'الاٹمنٹ', label_en: 'Allocation', type: 'select', options: [
+      { value: 'AUTO', label: 'خودکار (پرانا پہلے)', label_en: 'Auto' }, { value: 'ADVANCE', label: 'ایڈوانس', label_en: 'Advance' }, { value: 'MANUAL', label: 'دستی', label_en: 'Manual' }] },
+    { name: 'note', label: 'نوٹ', label_en: 'Note', type: 'textarea' },
   ] },
-  payment: { title: 'رقم ادا', endpoint: '/api/v1/payments', back: '/erp/khata', offline: true, fields: [
-    { name: 'date', label: 'تاریخ', type: 'date', required: true },
-    { name: 'party_id', label: 'فریق', type: 'party', required: true },
-    { name: 'amount_paisa', label: 'رقم', type: 'money', required: true },
-    { name: 'account_id', label: 'اکاؤنٹ', type: 'account', required: true },
-    { name: 'payee_type', label: 'قسم', type: 'select', options: [
-      { value: 'SUPPLIER', label: 'سپلائر' }, { value: 'FARMER', label: 'کاشتکار' },
-      { value: 'EMPLOYEE', label: 'ملازم' }, { value: 'CUSTOMER', label: 'گاہک' }] },
-    { name: 'reference', label: 'حوالہ', type: 'text' }, { name: 'note', label: 'نوٹ', type: 'textarea' },
+  payment: { title: 'رقم ادا', title_en: 'Pay Money', endpoint: '/api/v1/payments', back: '/erp/khata', offline: true, fields: [
+    { name: 'date', label: 'تاریخ', label_en: 'Date', type: 'date', required: true },
+    { name: 'party_id', label: 'فریق', label_en: 'Party', type: 'party', required: true },
+    { name: 'amount_paisa', label: 'رقم', label_en: 'Amount', type: 'money', required: true },
+    { name: 'account_id', label: 'اکاؤنٹ', label_en: 'Account', type: 'account', required: true },
+    { name: 'payee_type', label: 'قسم', label_en: 'Type', type: 'select', options: [
+      { value: 'SUPPLIER', label: 'سپلائر', label_en: 'Supplier' }, { value: 'FARMER', label: 'کاشتکار', label_en: 'Farmer' },
+      { value: 'EMPLOYEE', label: 'ملازم', label_en: 'Employee' }, { value: 'CUSTOMER', label: 'گاہک', label_en: 'Customer' }] },
+    { name: 'reference', label: 'حوالہ', label_en: 'Reference', type: 'text' }, { name: 'note', label: 'نوٹ', label_en: 'Note', type: 'textarea' },
   ] },
-  transfer: { title: 'رقم منتقلی', endpoint: '/api/v1/transfers', back: '/erp/accounts', fields: [
-    { name: 'date', label: 'تاریخ', type: 'date', required: true },
-    { name: 'from_account_id', label: 'سے', type: 'account', required: true },
-    { name: 'to_account_id', label: 'تک', type: 'account', required: true },
-    { name: 'amount_paisa', label: 'رقم', type: 'money', required: true },
-    { name: 'note', label: 'نوٹ', type: 'text' },
+  transfer: { title: 'رقم منتقلی', title_en: 'Transfer Money', endpoint: '/api/v1/transfers', back: '/erp/accounts', fields: [
+    { name: 'date', label: 'تاریخ', label_en: 'Date', type: 'date', required: true },
+    { name: 'from_account_id', label: 'سے', label_en: 'From', type: 'account', required: true },
+    { name: 'to_account_id', label: 'تک', label_en: 'To', type: 'account', required: true },
+    { name: 'amount_paisa', label: 'رقم', label_en: 'Amount', type: 'money', required: true },
+    { name: 'note', label: 'نوٹ', label_en: 'Note', type: 'text' },
   ] },
-  expense: { title: 'خرچہ', endpoint: '/api/v1/expenses', back: '/erp/expenses', offline: true, fields: [
-    { name: 'date', label: 'تاریخ', type: 'date', required: true },
-    { name: 'category_code', label: 'زمرہ', type: 'expenseCategory', required: true },
-    { name: 'vendor', label: 'وینڈر', type: 'text' },
-    { name: 'amount_paisa', label: 'رقم', type: 'money', required: true },
-    { name: 'account_id', label: 'ادا از', type: 'account', required: true },
-    { name: 'note', label: 'نوٹ', type: 'textarea' },
+  expense: { title: 'خرچہ', title_en: 'Expense', endpoint: '/api/v1/expenses', back: '/erp/expenses', offline: true, fields: [
+    { name: 'date', label: 'تاریخ', label_en: 'Date', type: 'date', required: true },
+    { name: 'category_code', label: 'زمرہ', label_en: 'Category', type: 'expenseCategory', required: true },
+    { name: 'vendor', label: 'وینڈر', label_en: 'Vendor', type: 'text' },
+    { name: 'amount_paisa', label: 'رقم', label_en: 'Amount', type: 'money', required: true },
+    { name: 'account_id', label: 'ادا از', label_en: 'Paid From', type: 'account', required: true },
+    { name: 'note', label: 'نوٹ', label_en: 'Note', type: 'textarea' },
   ] },
-  employee: { title: 'ملازم', endpoint: '/api/v1/employees', back: '/erp/employees', fields: [
-    { name: 'name', label: 'نام', type: 'text', required: true },
+  employee: { title: 'ملازم', title_en: 'Employee', endpoint: '/api/v1/employees', back: '/erp/employees', fields: [
+    { name: 'name', label: 'نام', label_en: 'Name', type: 'text', required: true },
     { name: 'role', label: 'عہدہ', type: 'text' }, { name: 'phone', label: 'موبائل', type: 'text' },
     { name: 'join_date', label: 'تاریخِ ملازمت', type: 'date', required: true },
     { name: 'base_salary_paisa', label: 'تنخواہ', type: 'money' },

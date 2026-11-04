@@ -110,6 +110,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [lang, dir, pathname, pageName, brand, bi, t]);
 
   const reloadSession = useCallback(async () => {
+    const hasSessionCookie = typeof document !== 'undefined' && /(?:^|;\s*)zt_csrf=/.test(document.cookie);
+    const isErpRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/erp');
+    if (!hasSessionCookie && !isErpRoute) {
+      setSession(null);
+      setLoadingSession(false);
+      return;
+    }
     try { const s = await api<Session>('/api/v1/auth/me'); setSession(s); }
     catch { setSession(null); }
     finally { setLoadingSession(false); }
@@ -143,7 +150,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
       setLastSync(new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' }));
-      toast(`${sent} اندراج سنک ہو گئے${conf ? `، ${conf} تضاد` : ''}`, conf ? 'err' : 'ok');
     } finally { setSyncing(false); await refreshCounts(); window.dispatchEvent(new Event('zt-synced')); }
     return { sent, conflicts: conf };
   }, [syncing, refreshCounts, toast]);

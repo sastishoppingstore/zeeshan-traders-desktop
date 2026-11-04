@@ -55,8 +55,9 @@ export function useTilt<T extends HTMLElement>(strength = 8): React.MutableRefOb
   useEffect(() => {
     const el = ref.current;
     if (!el || reduced) return;
-    if (matchMedia?.('(hover: none)').matches) return;
+    if (typeof matchMedia === 'function' && matchMedia('(hover: none)').matches) return;
     let frame = 0;
+    let rect: DOMRect | null = null;
     const set = (x: number, y: number) => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -64,18 +65,24 @@ export function useTilt<T extends HTMLElement>(strength = 8): React.MutableRefOb
         el.style.setProperty('--tilt-y', `${(-x).toFixed(2)}deg`);
       });
     };
+    const onEnter = () => { rect = el.getBoundingClientRect(); };
     const onMove = (ev: PointerEvent) => {
-      const r = el.getBoundingClientRect();
+      const r = rect ?? el.getBoundingClientRect();
       if (!r.width || !r.height) return;
       set(((ev.clientX - r.left) / r.width - 0.5) * 2 * strength,
         ((ev.clientY - r.top) / r.height - 0.5) * 2 * strength);
     };
-    const onLeave = () => set(0, 0);
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointerleave', onLeave);
-    el.addEventListener('pointercancel', onLeave);
+    const onLeave = () => {
+      rect = null;
+      set(0, 0);
+    };
+    el.addEventListener('pointerenter', onEnter, { passive: true });
+    el.addEventListener('pointermove', onMove, { passive: true });
+    el.addEventListener('pointerleave', onLeave, { passive: true });
+    el.addEventListener('pointercancel', onLeave, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
+      el.removeEventListener('pointerenter', onEnter);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerleave', onLeave);
       el.removeEventListener('pointercancel', onLeave);
@@ -149,10 +156,12 @@ export function useSpot<T extends HTMLElement>(): React.MutableRefObject<T | nul
   const reduced = useReducedMotion();
   useEffect(() => {
     const el = ref.current;
-    if (!el || reduced || matchMedia?.('(hover: none)').matches) return;
+    if (!el || reduced || (typeof matchMedia === 'function' && matchMedia('(hover: none)').matches)) return;
     let frame = 0;
+    let rect: DOMRect | null = null;
+    const onEnter = () => { rect = el.getBoundingClientRect(); };
     const onMove = (ev: PointerEvent) => {
-      const r = el.getBoundingClientRect();
+      const r = rect ?? el.getBoundingClientRect();
       if (!r.width || !r.height) return;
       const x = ((ev.clientX - r.left) / r.width) * 100;
       const y = ((ev.clientY - r.top) / r.height) * 100;
@@ -162,9 +171,18 @@ export function useSpot<T extends HTMLElement>(): React.MutableRefObject<T | nul
         el.style.setProperty('--my', `${y.toFixed(1)}%`);
       });
     };
-    el.addEventListener('pointermove', onMove);
-    el.addEventListener('pointercancel', () => { cancelAnimationFrame(frame); });
-    return () => { cancelAnimationFrame(frame); el.removeEventListener('pointermove', onMove); };
+    const onLeave = () => { rect = null; cancelAnimationFrame(frame); };
+    el.addEventListener('pointerenter', onEnter, { passive: true });
+    el.addEventListener('pointermove', onMove, { passive: true });
+    el.addEventListener('pointerleave', onLeave, { passive: true });
+    el.addEventListener('pointercancel', onLeave, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener('pointerenter', onEnter);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerleave', onLeave);
+      el.removeEventListener('pointercancel', onLeave);
+    };
   }, [reduced]);
   return ref;
 }

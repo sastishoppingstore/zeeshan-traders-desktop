@@ -30,9 +30,11 @@ export function MediaTile({ photo, title, subtitle, badge, href, onClick, size =
   const tilt = useTilt<HTMLElement>(6);
   // One element, two pointer hooks: the spotlight paints the highlight, the tilt turns the tile.
   const setRef = (el: HTMLElement | null) => { spot.current = el; tilt.current = el; };
+  const asset = photo ? (IMAGES as Record<string, any>)[photo.key] : null;
+  const tileSrc = (size === 'sm' && asset?.sm) || asset?.md || asset?.lg;
   const body = <>
     <span className={`tile-media tile-media-${size}`}>
-      {photo ? <img src={IMAGES[photo.key].md} alt="" loading="lazy" decoding="async" width={420} height={357} />
+      {tileSrc ? <img src={tileSrc} alt="" loading="lazy" decoding="async" width={size === 'sm' ? 160 : 420} height={size === 'sm' ? 136 : 357} />
         : <span className="tile-media-fallback" aria-hidden="true">{title.slice(0, 2)}</span>}
       <span className="tile-media-scrim" aria-hidden="true" />
     </span>

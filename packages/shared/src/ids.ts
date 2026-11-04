@@ -76,26 +76,53 @@ export async function decryptText(payload: string, secret: string): Promise<stri
   return new TextDecoder().decode(plain);
 }
 
-/** PBKDF2-SHA256 with >=310,000 iterations (spec 2.1 / H7). */
-export async function hashPassword(password: string, salt?: string): Promise<{ hash: string; salt: string; iterations: number }> {
-  const iterations = 310_000;
+/** PBKDF2-SHA256 with >=310,000 iterations (spec 2.1 / H7), auto-adapting to Cloudflare 100k cap. */
+export async function hashPassword(password: string, salt?: string, requestedIterations = 310_000): Promise<{ hash: string; salt: string; iterations: number }> {
+  let iterations = requestedIterations;
   const saltB64 = salt ?? toBase64(crypto.getRandomValues(new Uint8Array(16)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password) as any, 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(saltB64) as any, iterations },
-    key,
-    256,
-  );
+  let bits: ArrayBuffer;
+  try {
+    bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(saltB64) as any, iterations },
+      key,
+      256,
+    );
+  } catch (err: any) {
+    if (String(err?.message || err).includes('100000')) {
+      iterations = 100_000;
+      bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(saltB64) as any, iterations },
+        key,
+        256,
+      );
+    } else {
+      throw err;
+    }
+  }
   return { hash: toBase64(new Uint8Array(bits)), salt: saltB64, iterations };
 }
 
 export async function verifyPassword(password: string, hash: string, salt: string, iterations = 310_000): Promise<boolean> {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password) as any, 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(salt) as any, iterations },
-    key,
-    256,
-  );
+  let bits: ArrayBuffer;
+  try {
+    bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(salt) as any, iterations },
+      key,
+      256,
+    );
+  } catch (err: any) {
+    if (String(err?.message || err).includes('100000') && iterations > 100_000) {
+      bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', hash: 'SHA-256', salt: fromBase64(salt) as any, iterations: 100_000 },
+        key,
+        256,
+      );
+    } else {
+      throw err;
+    }
+  }
   const candidate = toBase64(new Uint8Array(bits));
   // constant-time-ish comparison
   if (candidate.length !== hash.length) return false;

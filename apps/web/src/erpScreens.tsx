@@ -27,9 +27,10 @@ const MONTH_START = () => TODAY().slice(0, 8) + '01';
 const money = (v: any) => <span className="num">{formatPKR(v ?? 0)}</span>;
 
 function RangePicker({ from, to, setFrom, setTo }: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
+  const { lang } = useApp();
   return <div className="row toolbar no-print">
-    <TextField label="از تاریخ" value={from} onChange={setFrom} type="date" />
-    <TextField label="تا تاریخ" value={to} onChange={setTo} type="date" />
+    <TextField label={lang === 'ur' ? 'از تاریخ' : 'From Date'} value={from} onChange={setFrom} type="date" />
+    <TextField label={lang === 'ur' ? 'تا تاریخ' : 'To Date'} value={to} onChange={setTo} type="date" />
   </div>;
 }
 function useRange(start = MONTH_START()) {
@@ -39,7 +40,7 @@ function useRange(start = MONTH_START()) {
 
 // --------------------------------- Generic list ------------------------------
 export function GenericList({ config }: { config: any }) {
-  const { t, can, toast } = useApp();
+  const { t, can, toast, lang } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState(''), [status, setStatus] = useState('');
   const [createOpen, setCreateOpen] = useState(false), [createVals, setCreateVals] = useState<Record<string, string>>({});
@@ -53,32 +54,37 @@ export function GenericList({ config }: { config: any }) {
   const perm = config.endpoint.includes('products') ? 'products.read' : config.endpoint.includes('parties') ? 'parties.read'
     : config.endpoint.includes('expenses') ? 'expenses.read' : config.endpoint.includes('sales') ? 'sales.read'
     : config.endpoint.includes('purchases') ? 'purchases.read' : 'catalogue.read';
+  const title = lang === 'ur' ? config.title : (config.title_en || config.title);
   return <div>
-    <div className="between"><h1>{config.title}</h1>
+    <div className="between"><h1>{title}</h1>
       <div className="btn-row no-print">
-        {(config.actions ?? []).map((a: any) => <Link key={a.to} className="btn btn-secondary btn-sm" to={a.to}>{a.label}</Link>)}
-        {config.create && <Button size="sm" onClick={() => setCreateOpen(true)}>+ نیا</Button>}
-        {config.endpoint.includes('products') && <Button variant="ghost" size="sm" onClick={() => downloadCsv('/api/v1/catalogue/export', 'zt-products.csv')}>CSV برآمد</Button>}
-        <Button variant="ghost" size="sm" onClick={() => window.print()} aria-label="پرنٹ"><Mark kind="print" /></Button>
+        {(config.actions ?? []).map((a: any) => <Link key={a.to} className="btn btn-secondary btn-sm" to={a.to}>{lang === 'ur' ? a.label : (a.label_en || a.label)}</Link>)}
+        {config.create && <Button size="sm" onClick={() => setCreateOpen(true)}>{lang === 'ur' ? '+ نیا' : '+ New'}</Button>}
+        {config.endpoint.includes('products') && <Button variant="ghost" size="sm" onClick={() => downloadCsv('/api/v1/catalogue/export', 'zt-products.csv')}>{lang === 'ur' ? 'CSV برآمد' : 'Export CSV'}</Button>}
+        <Button variant="ghost" size="sm" onClick={() => window.print()} aria-label={lang === 'ur' ? 'پرنٹ' : 'Print'}><Mark kind="print" /></Button>
       </div></div>
     <div className="toolbar no-print">
-      <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="تلاش…" aria-label="تلاش" />
-      <SelectField label="" value={status} onChange={setStatus} placeholder="تمام حالتیں"
-        options={[{ value: 'POSTED', label: 'پوسٹڈ' }, { value: 'DRAFT', label: 'ڈرافٹ' }, { value: 'REVERSED', label: 'ریورسڈ' }]} />
-      <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label="دوبارہ لوڈ"><Mark kind="sync" /></Button>
+      <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === 'ur' ? 'تلاش…' : 'Search…'} aria-label={lang === 'ur' ? 'تلاش' : 'Search'} />
+      <SelectField label="" value={status} onChange={setStatus} placeholder={lang === 'ur' ? 'تمام حالتیں' : 'All Statuses'}
+        options={[{ value: 'POSTED', label: lang === 'ur' ? 'پوسٹڈ' : 'Posted' }, { value: 'DRAFT', label: lang === 'ur' ? 'ڈرافٹ' : 'Draft' }, { value: 'REVERSED', label: lang === 'ur' ? 'ریورسڈ' : 'Reversed' }]} />
+      <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label={lang === 'ur' ? 'دوبارہ لوڈ' : 'Reload'}><Mark kind="sync" /></Button>
     </div>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!rows.length} permission={can(perm)} rows={5}>
       <DataTable rows={rows} columns={[
-        ...config.columns.map((c: any) => ({ ...c, render: c.key === 'status' ? (r: any) => <StatusChip status={r.status} /> : c.render })),
+        ...config.columns.map((c: any) => ({
+          ...c,
+          label: lang === 'ur' ? c.label : (c.label_en || c.label),
+          render: c.key === 'status' ? (r: any) => <StatusChip status={r.status} /> : c.render
+        })),
       ] as Column[]}
         onRow={config.detail ? (r) => nav(config.detail(r)) : undefined}
-        csvName={config.title} footer={<div className="small">{rows.length} قطاریں — مزید کے لیے تلاش کو محدود کریں</div>} />
+        csvName={title} footer={<div className="small">{rows.length} {lang === 'ur' ? 'قطاریں — مزید کے لیے تلاش کو محدود کریں' : 'rows — refine search for more'}</div>} />
       {data?.next_cursor && <div className="center" style={{ marginBlock: 16 }}>
         <Button variant="secondary" onClick={() => setCursor(data.next_cursor)}>{t('loadMore')}</Button></div>}
     </AsyncView>
-    {config.create && <Sheet open={createOpen} onClose={() => setCreateOpen(false)} title={`+ ${config.title}`}>
-      {(config.create.fields as { name: string; label: string; type?: string }[]).map((f) =>
-        <TextField key={f.name} label={f.label} value={createVals[f.name] ?? ''}
+    {config.create && <Sheet open={createOpen} onClose={() => setCreateOpen(false)} title={`+ ${title}`}>
+      {(config.create.fields as { name: string; label: string; label_en?: string; type?: string }[]).map((f) =>
+        <TextField key={f.name} label={lang === 'ur' ? f.label : (f.label_en || f.label)} value={createVals[f.name] ?? ''}
           onChange={(v) => setCreateVals({ ...createVals, [f.name]: v })} inputMode={f.type === 'number' ? 'numeric' : undefined} required={f.name === 'name_ur' || f.name === 'code'} />)}
       {createErr && <div className="err"><Mark kind="warn" /> {createErr}</div>}
       <Button loading={createBusy} onClick={async () => {
@@ -89,29 +95,28 @@ export function GenericList({ config }: { config: any }) {
           if (config.create.slugFromName && !body.slug) body.slug = String(body.name_ur ?? '').trim().toLowerCase().replace(/\s+/g, '-');
           if (config.create.extra) Object.assign(body, config.create.extra);
           await api(config.create.endpoint, { method: 'POST', body });
-          toast('شامل ہو گیا'); setCreateOpen(false); setCreateVals({}); refetch();
+          toast(lang === 'ur' ? 'شامل ہو گیا' : 'Added'); setCreateOpen(false); setCreateVals({}); refetch();
         } catch (e: any) { setCreateErr(e.message_ur ?? String(e)); } finally { setCreateBusy(false); }
-      }}>محفوظ کریں</Button>
+      }}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
     </Sheet>}
   </div>;
 }
 
 /** ERP-02 quick actions — the only place the dashboard gets 3D depth (forms stay flat). */
-const DASH_QUICK: { to: string; ur: string; icon: string }[] = [
-  { to: '/erp/fertilizer/sale/new?quick=1', ur: 'کھاد فروخت', icon: 'sales' },
-  { to: '/erp/fertilizer/purchase/new?quick=1', ur: 'کھاد خرید', icon: 'purchases' },
-  { to: '/erp/grains', ur: 'اجناس', icon: 'grains' },
-  { to: '/erp/receipts/new', ur: 'رقم وصول', icon: 'khata' },
-  { to: '/erp/payments/new', ur: 'رقم ادا', icon: 'accounts' },
-  { to: '/erp/expenses/new', ur: 'خرچہ', icon: 'expenses' },
+const DASH_QUICK: { to: string; ur: string; en: string; icon: string }[] = [
+  { to: '/erp/fertilizer/sale/new?quick=1', ur: 'کھاد فروخت', en: 'Fertilizer Sale', icon: 'sales' },
+  { to: '/erp/fertilizer/purchase/new?quick=1', ur: 'کھاد خرید', en: 'Fertilizer Purchase', icon: 'purchases' },
+  { to: '/erp/grains', ur: 'اجناس', en: 'Grains', icon: 'grains' },
+  { to: '/erp/receipts/new', ur: 'رقم وصول', en: 'Receive Money', icon: 'khata' },
+  { to: '/erp/payments/new', ur: 'رقم ادا', en: 'Pay Money', icon: 'accounts' },
+  { to: '/erp/expenses/new', ur: 'خرچہ', en: 'Expense', icon: 'expenses' },
 ];
 
 // ---------------------------------- Dashboard --------------------------------
 export function Dashboard() {
-  const { t, online, pending, conflicts, syncNow, can } = useApp();
+  const { t, online, pending, conflicts, syncNow, can, lang } = useApp();
   const [from, setFrom] = useState(TODAY()), [to, setTo] = useState(TODAY());
   const { data, isLoading, error, refetch } = useGet<any>('dashboard', `/api/v1/dashboard?from=${from}&to=${to}`);
-  const usage = useGet<any>('usage', '/api/v1/usage');
   if (!can('dashboard.view')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
   if (isLoading) return <Skeleton rows={8} />;
   if (error) return <ErrorState error={error} retry={() => refetch()} />;
@@ -120,62 +125,62 @@ export function Dashboard() {
   const chartPoints = (d?.charts ?? []).filter((x: any) => x.metric === 'SALE').map((x: any) => x.paisa);
   const max = Math.max(1, ...chartPoints);
   return <div>
-    <div className="between"><h1 className="head-icon"><NavIcon icon="dashboard" label="ڈیش بورڈ" size={34} />ڈیش بورڈ</h1>
-      <div className="row no-print"><TextField label="از تاریخ" value={from} onChange={setFrom} type="date" />
-        <TextField label="تا تاریخ" value={to} onChange={setTo} type="date" /></div></div>
+    <div className="between"><h1 className="head-icon"><NavIcon icon="dashboard" label={lang === 'ur' ? 'ڈیش بورڈ' : 'Dashboard'} size={34} />{lang === 'ur' ? 'ڈیش بورڈ' : 'Dashboard'}</h1>
+      <div className="row no-print"><TextField label={lang === 'ur' ? 'از تاریخ' : 'From Date'} value={from} onChange={setFrom} type="date" />
+        <TextField label={lang === 'ur' ? 'تا تاریخ' : 'To Date'} value={to} onChange={setTo} type="date" /></div></div>
     <div className="stats-grid">
-      <StatCard label="آج کی فروخت" value={formatPKR(d?.today?.sales_paisa ?? 0)} tone="var(--primary)" />
-      <StatCard label="آج کی خرید" value={formatPKR(d?.today?.purchases_paisa ?? 0)} />
-      <StatCard label="وصولیاں" value={formatPKR(d?.today?.collections_paisa ?? 0)} />
-      <StatCard label="ادائیگیاں" value={formatPKR(d?.today?.payments_paisa ?? 0)} />
-      <StatCard label="اخراجات" value={formatPKR(d?.today?.expenses_paisa ?? 0)} tone="var(--danger)" />
-      <StatCard label="مجموعی منافع" value={formatPKR(d?.today?.gross_profit_paisa ?? 0)} tone="var(--success)" />
-      <StatCard label="قابلِ وصول" value={formatPKR(d?.credit?.receivable_paisa ?? 0)} />
-      <StatCard label="قابلِ ادا" value={formatPKR(d?.credit?.payable_paisa ?? 0)} />
-      <StatCard label="نقد + بینک" value={formatPKR(cash)} />
+      <StatCard label={lang === 'ur' ? 'آج کی فروخت' : "Today's Sales"} value={formatPKR(d?.today?.sales_paisa ?? 0)} tone="var(--primary)" />
+      <StatCard label={lang === 'ur' ? 'آج کی خرید' : "Today's Purchases"} value={formatPKR(d?.today?.purchases_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'وصولیاں' : 'Collections'} value={formatPKR(d?.today?.collections_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'ادائیگیاں' : 'Payments'} value={formatPKR(d?.today?.payments_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'اخراجات' : 'Expenses'} value={formatPKR(d?.today?.expenses_paisa ?? 0)} tone="var(--danger)" />
+      <StatCard label={lang === 'ur' ? 'مجموعی منافع' : 'Gross Profit'} value={formatPKR(d?.today?.gross_profit_paisa ?? 0)} tone="var(--success)" />
+      <StatCard label={lang === 'ur' ? 'قابلِ وصول' : 'Receivables'} value={formatPKR(d?.credit?.receivable_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'قابلِ ادا' : 'Payables'} value={formatPKR(d?.credit?.payable_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'نقد + بینک' : 'Cash + Bank'} value={formatPKR(cash)} />
     </div>
     <Reveal className="quick-grid" as="div">{DASH_QUICK.map((q) =>
-      <TiltCard key={q.to} href={q.to} tone="emerald"><NavIcon icon={q.icon} label={q.ur} size={40} /><strong>{q.ur}</strong></TiltCard>)}</Reveal>
+      <TiltCard key={q.to} href={q.to} tone="emerald"><NavIcon icon={q.icon} label={lang === 'ur' ? q.ur : q.en} size={40} /><strong>{lang === 'ur' ? q.ur : q.en}</strong></TiltCard>)}</Reveal>
     <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', marginBlock: 16 }}>
-      <div className="card glass"><h2>کتابیں (17)</h2>
+      <div className="card glass"><h2>{lang === 'ur' ? 'کھاتہ جات (17)' : 'Business Ledgers (17)'}</h2>
         <div className="row" style={{ flexWrap: 'wrap' }}>
           {(d?.books ?? []).map((b: any) => <Link key={b.code} to={b.code === 'FERT' ? '/erp/fertilizer' : b.code === 'PEST' ? '/erp/pesticide'
             : (CROP_CODES as readonly string[]).includes(b.code) ? `/erp/grains/${b.code}` : `/erp/goods/${b.code}`}
-            className="chip success" style={{ textDecoration: 'none' }}>{b.ur}: {formatPKR(b.today_sale_paisa)}</Link>)}
+            className="chip success" style={{ textDecoration: 'none' }}>{lang === 'ur' ? b.ur : (b.en || b.ur)}: {formatPKR(b.today_sale_paisa)}</Link>)}
         </div></div>
-      <div className="card glass"><h2>الرٹس</h2>
+      <div className="card glass"><h2>{lang === 'ur' ? 'الرٹس' : 'Alerts'}</h2>
         {(d?.alerts ?? []).length ? (d.alerts as any[]).map((a, i) => <div key={i} className="item">
-          <div><div className="t1">{a.title_ur ?? a.name_ur}</div><div className="t2">{a.type}{a.expiry_date ? ` — ${a.expiry_date}` : ''}</div></div>
-          <StatusChip status={a.type} /></div>) : <div className="notice success">کوئی الرٹ نہیں — کوئی فرضی ڈیٹا نہیں دکھایا گیا۔</div>}
-        <div className="small" style={{ marginBlockStart: 12 }}>نئی پوچھ گچھ: {d?.counts?.pending_enquiries ?? 0} · سنک باقی: {d?.counts?.pending_sync ?? 0} · تضادات: {d?.counts?.conflicts ?? 0}</div>
+          <div><div className="t1">{lang === 'ur' ? (a.title_ur ?? a.name_ur) : (a.title_en ?? a.name_en ?? a.title_ur ?? a.name_ur)}</div><div className="t2">{a.type}{a.expiry_date ? ` — ${a.expiry_date}` : ''}</div></div>
+          <StatusChip status={a.type} /></div>) : <div className="notice success">{lang === 'ur' ? 'کوئی الرٹ نہیں — کوئی فرضی ڈیٹا نہیں دکھایا گیا۔' : 'No alerts.'}</div>}
+        <div className="small" style={{ marginBlockStart: 12 }}>{lang === 'ur' ? `نئی پوچھ گچھ: ${d?.counts?.pending_enquiries ?? 0} · سنک باقی: ${d?.counts?.pending_sync ?? 0} · تضادات: ${d?.counts?.conflicts ?? 0}` : `New Enquiries: ${d?.counts?.pending_enquiries ?? 0} · Pending Sync: ${d?.counts?.pending_sync ?? 0} · Conflicts: ${d?.counts?.conflicts ?? 0}`}</div>
       </div>
-      <div className="card glass"><h2>30 دن کی فروخت</h2>
+      <div className="card glass"><h2>{lang === 'ur' ? '30 دن کی فروخت' : '30-Day Sales'}</h2>
         {chartPoints.length ? <div className="chart-cols" role="img"
-          aria-label={`۳۰ دن کی فروخت، سب سے زیادہ روزانہ ${formatPKR(max)}`}>
+          aria-label={lang === 'ur' ? `۳۰ دن کی فروخت، سب سے زیادہ روزانہ ${formatPKR(max)}` : `30-day sales, peak daily ${formatPKR(max)}`}>
           {chartPoints.map((v: number, i: number) => <span key={i} className="chart-col"
             style={{ height: `${Math.max(3, Math.round((v / max) * 100))}%` }} />)}
-        </div> : <div className="notice info small">ابھی کوئی فروخت نہیں — اصل ڈیٹا درج ہونے پر گراف بنے گا۔</div>}
+        </div> : <div className="notice info small">{lang === 'ur' ? 'ابھی کوئی فروخت نہیں — اصل ڈیٹا درج ہونے پر گراف بنے گا۔' : 'No sales yet — graph will appear once transactions are recorded.'}</div>}
       </div>
     </div>
-    <div className="card"><div className="between"><h2>حالیہ دستاویزات</h2><Link to="/erp/documents">سب دیکھیں ›</Link></div>
+    <div className="card"><div className="between"><h2>{lang === 'ur' ? 'حالیہ دستاویزات' : 'Recent Documents'}</h2><Link to="/erp/documents">{lang === 'ur' ? 'سب دیکھیں ›' : 'View all ›'}</Link></div>
       <DataTable rows={d?.recent ?? []} columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' },
-        { key: 'kind', label: 'قسم' }, { key: 'amount_paisa', label: 'رقم', render: (r: any) => money(r.amount_paisa) },
-      ] as Column[]} emptyText="ابھی کوئی دستاویز نہیں" />
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' },
+        { key: 'kind', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', render: (r: any) => money(r.amount_paisa) },
+      ] as Column[]} emptyText={lang === 'ur' ? 'ابھی کوئی دستاویز نہیں' : 'No documents yet'} />
     </div>
-    <div className="grid g2" style={{ marginBlock: 16 }}>
-      <div className="card"><h2>سنک</h2>
-        <div className="kv"><span className="k">نیٹ ورک</span><span className="v">{online ? 'آن لائن' : 'آف لائن'}</span>
-          <span className="k">مقامی قطار</span><span className="v">{pending}</span>
-          <span className="k">تضادات</span><span className="v">{conflicts}</span></div>
-        <div className="btn-row" style={{ marginBlockStart: 12 }}><Button size="sm" onClick={() => void syncNow()}>ابھی سنک کریں</Button>
-          <Link className="btn btn-ghost btn-sm" to="/erp/sync">سنک سینٹر</Link></div></div>
-      <div className="card"><h2>D1 استعمال</h2>
-        {usage.data ? <><div className="small">{usage.data.day}</div>
-          <div className="small">پڑھائی: {usage.data.read_pct}% · لکھائی: {usage.data.write_pct}%</div>
-          <div className="skeleton" style={{ height: 10, width: `${Math.min(100, usage.data.read_pct)}%`, marginBlock: 8 }} />
-          {(usage.data.read_pct >= 70 || usage.data.write_pct >= 70) && <div className="notice"><Mark kind="warn" /> 70% حد — Workers Paid تجویز ہے</div>}
-          <div className="small">{usage.data.note_ur}</div></> : <Skeleton rows={1} />}
+    <div className="card" style={{ marginBlock: 16 }}>
+      <h2>{lang === 'ur' ? 'سنک' : 'Sync'}</h2>
+      <div className="kv">
+        <span className="k">{lang === 'ur' ? 'نیٹ ورک' : 'Network'}</span>
+        <span className="v">{online ? (lang === 'ur' ? 'آن لائن' : 'Online') : (lang === 'ur' ? 'آف لائن' : 'Offline')}</span>
+        <span className="k">{lang === 'ur' ? 'مقامی قطار' : 'Local Queue'}</span>
+        <span className="v">{pending}</span>
+        <span className="k">{lang === 'ur' ? 'تضادات' : 'Conflicts'}</span>
+        <span className="v">{conflicts}</span>
+      </div>
+      <div className="btn-row" style={{ marginBlockStart: 12 }}>
+        <Button size="sm" onClick={() => void syncNow()}>{lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}</Button>
+        <Link className="btn btn-ghost btn-sm" to="/erp/sync">{lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'}</Link>
       </div>
     </div>
   </div>;
@@ -366,7 +371,7 @@ export function ProductImport() {
 
 // ---------------------------- Business book hubs ------------------------------
 export function HubScreen({ book }: { book: string }) {
-  const { t, can } = useApp();
+  const { t, can, lang } = useApp();
   const def = BOOK_MAP[book];
   const range = useRange();
   const sales = useGet<any>('hub-sales', `/api/v1/sales?from=${range.from}&to=${range.to}&limit=100`);
@@ -378,52 +383,53 @@ export function HubScreen({ book }: { book: string }) {
   const sRows = Array.isArray(sales.data) ? sales.data : [];
   const pRows = Array.isArray(purchases.data) ? purchases.data : [];
   const stockRows = (stock.data ?? []).filter((r: any) => !r.book_code || r.book_code === book);
-  return <div><div className="between"><h1>{def?.ur ?? book}</h1>
-    <div className="btn-row">{can('purchases.post') && <Link className="btn btn-secondary btn-sm" to={`${base}/purchase/new`}>+ خرید</Link>}
-      {can('sales.post') && <Link className="btn btn-primary btn-sm" to={`${base}/sale/new`}>+ فروخت</Link>}</div></div>
-    <Tabs tabs={[{ id: 'overview', label: 'جائزہ' }, { id: 'sales', label: 'فروخت' }, ...(mayPurchases ? [{ id: 'purchases', label: 'خرید' }] : []),
-      { id: 'stock', label: 'اسٹاک' }, ...(book === 'PEST' ? [{ id: 'register', label: 'قانونی رجسٹر' }] : [])]} active={tab} onChange={setTab} />
+  return <div><div className="between"><h1>{lang === 'ur' ? (def?.ur ?? book) : (def?.en ?? def?.ur ?? book)}</h1>
+    <div className="btn-row">{can('purchases.post') && <Link className="btn btn-secondary btn-sm" to={`${base}/purchase/new`}>{lang === 'ur' ? '+ خرید' : '+ Purchase'}</Link>}
+      {can('sales.post') && <Link className="btn btn-primary btn-sm" to={`${base}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}</div></div>
+    <Tabs tabs={[{ id: 'overview', label: lang === 'ur' ? 'جائزہ' : 'Overview' }, { id: 'sales', label: lang === 'ur' ? 'فروخت' : 'Sales' }, ...(mayPurchases ? [{ id: 'purchases', label: lang === 'ur' ? 'خرید' : 'Purchases' }] : []),
+      { id: 'stock', label: lang === 'ur' ? 'اسٹاک' : 'Stock' }, ...(book === 'PEST' ? [{ id: 'register', label: lang === 'ur' ? 'قانونی رجسٹر' : 'Legal Register' }] : [])]} active={tab} onChange={setTab} />
     {tab === 'overview' && <div><div className="stats-grid">
-      <StatCard label="فروخت" value={formatPKR(sRows.reduce((a: number, r: any) => a + r.total_paisa, 0))} />
-      {mayPurchases && <StatCard label="خرید" value={formatPKR(pRows.reduce((a: number, r: any) => a + r.total_paisa, 0))} />}
-      <StatCard label="فروخت دستاویزات" value={sRows.length} />
-      {mayPurchases && <StatCard label="خرید دستاویزات" value={pRows.length} />}
+      <StatCard label={lang === 'ur' ? 'فروخت' : 'Sales'} value={formatPKR(sRows.reduce((a: number, r: any) => a + r.total_paisa, 0))} />
+      {mayPurchases && <StatCard label={lang === 'ur' ? 'خرید' : 'Purchases'} value={formatPKR(pRows.reduce((a: number, r: any) => a + r.total_paisa, 0))} />}
+      <StatCard label={lang === 'ur' ? 'فروخت دستاویزات' : 'Sales Documents'} value={sRows.length} />
+      {mayPurchases && <StatCard label={lang === 'ur' ? 'خرید دستاویزات' : 'Purchase Documents'} value={pRows.length} />}
     </div>
-      <div className="notice info">یہ کتاب الگ کھاتہ/لیجر رکھتی ہے؛ تمام پوسٹنگ ایک ایٹمی <code>db.batch()</code> میں ہوتی ہے۔</div>
-      {book === 'FERT' && <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/reports?report=fertilizer-register">کھاد فروخت رجسٹر</Link>
-        <Link className="btn btn-secondary btn-sm" to="/erp/reports?report=expiry">ایکسپائری رپورٹ</Link></div>}
+      <div className="notice info">یہ کھاتہ الگ لیجر رکھتا ہے؛ تمام پوسٹنگ ایک ایٹمی <code>db.batch()</code> میں ہوتی ہے۔</div>
+      {book === 'FERT' && <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/reports?report=fertilizer-register">{lang === 'ur' ? 'کھاد فروخت رجسٹر' : 'Fertilizer Sales Register'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/erp/reports?report=expiry">{lang === 'ur' ? 'ایکسپائری رپورٹ' : 'Expiry Report'}</Link></div>}
       {book === 'PEST' && <div className="notice">پیسٹی سائیڈ فروخت میں خریدار کا نام، موبائل اور پتہ لازمی ہیں؛ ایکسپائری ختم / قرنطینہ بیچ بلاک ہے۔
         لائسنس نمبر صرف مالک ترتیبات میں درج کرے گا — سسٹم کبھی نہیں بناتا۔</div>}
     </div>}
     {tab === 'sales' && <AsyncView loading={sales.isLoading} error={sales.error} retry={() => sales.refetch()} empty={!sRows.length}>
       <DataTable rows={sRows} csvName={`${book}-sales`} columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' },
-        { key: 'total_paisa', label: 'کل', render: (r: any) => money(r.total_paisa) },
-        { key: 'due_paisa', label: 'بقایا', render: (r: any) => money(r.due_paisa) },
-        { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' },
+        { key: 'total_paisa', label: lang === 'ur' ? 'کل' : 'Total', render: (r: any) => money(r.total_paisa) },
+        { key: 'due_paisa', label: lang === 'ur' ? 'بقایا' : 'Due', render: (r: any) => money(r.due_paisa) },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
       ] as Column[]} /></AsyncView>}
     {tab === 'purchases' && <AsyncView loading={purchases.isLoading} error={purchases.error} retry={() => purchases.refetch()} empty={!pRows.length}>
       <DataTable rows={pRows} csvName={`${book}-purchases`} columns={[
-        { key: 'number', label: 'نمبر' }, { key: 'date', label: 'تاریخ' },
-        { key: 'total_paisa', label: 'کل', render: (r: any) => money(r.total_paisa) },
-        { key: 'due_paisa', label: 'بقایا', render: (r: any) => money(r.due_paisa) },
+        { key: 'number', label: lang === 'ur' ? 'نمبر' : 'Number' }, { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' },
+        { key: 'total_paisa', label: lang === 'ur' ? 'کل' : 'Total', render: (r: any) => money(r.total_paisa) },
+        { key: 'due_paisa', label: lang === 'ur' ? 'بقایا' : 'Due', render: (r: any) => money(r.due_paisa) },
       ] as Column[]} /></AsyncView>}
     {tab === 'stock' && <AsyncView loading={stock.isLoading} error={stock.error} retry={() => stock.refetch()} empty={!stockRows.length}>
       <DataTable rows={stockRows} csvName={`${book}-stock`} columns={[
-        { key: 'name_ur', label: 'مصنوعات' }, { key: 'qty_milli', label: 'تعداد', render: (r: any) => <span className="num">{fromMilli(r.qty_milli)}</span> },
-        { key: 'value_paisa', label: 'مالیت', render: (r: any) => money(r.value_paisa) },
+        { key: 'name_ur', label: lang === 'ur' ? 'مصنوعات' : 'Product' }, { key: 'qty_milli', label: lang === 'ur' ? 'تعداد' : 'Quantity', render: (r: any) => <span className="num">{fromMilli(r.qty_milli)}</span> },
+        { key: 'value_paisa', label: lang === 'ur' ? 'مالیت' : 'Value', render: (r: any) => money(r.value_paisa) },
       ] as Column[]} /></AsyncView>}
     {tab === 'register' && <PesticideRegister />}
   </div>;
 }
 function PesticideRegister() {
   const { data, isLoading, error, refetch } = useGet<any>('pesticide-register', '/api/v1/reports/pesticide-register');
+  const { lang } = useApp();
   return <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!data?.rows?.length}>
     <div className="notice">یہ سافٹ ویئر صرف ریکارڈ/ایکسپورٹ رکھتا ہے؛ کسی سرکاری پورٹل پر فائلنگ کا دعویٰ نہیں۔ ضابطہ مالک ضلع زراعت دفتر لیہ سے تصدیق کرے۔</div>
     <DataTable rows={data?.rows ?? []} csvName="pesticide-register" columns={[
-      { key: 'date', label: 'تاریخ' }, { key: 'number', label: 'رسید' }, { key: 'buyer', label: 'خریدار' },
-      { key: 'product', label: 'مصنوعات' }, { key: 'batch', label: 'بیچ' },
-      { key: 'qty', label: 'تعداد' }, { key: 'amount_paisa', label: 'رقم', render: (r: any) => money(r.amount_paisa) },
+      { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'number', label: lang === 'ur' ? 'رسید' : 'Receipt' }, { key: 'buyer', label: lang === 'ur' ? 'خریدار' : 'Buyer' },
+      { key: 'product', label: lang === 'ur' ? 'مصنوعات' : 'Product' }, { key: 'batch', label: lang === 'ur' ? 'بیچ' : 'Batch' },
+      { key: 'qty', label: lang === 'ur' ? 'تعداد' : 'Quantity' }, { key: 'amount_paisa', label: lang === 'ur' ? 'رقم' : 'Amount', render: (r: any) => money(r.amount_paisa) },
     ] as Column[]} />
   </AsyncView>;
 }
@@ -431,7 +437,7 @@ function PesticideRegister() {
 // --------------------------------- Crop page ---------------------------------
 export function CropPage() {
   const { crop = 'WHEAT' } = useParams();
-  const { can, t } = useApp();
+  const { can, t, lang } = useApp();
   const range = useRange();
   const lots = useGet<any[]>('grain-lots', `/api/v1/grains/lots?crop=${crop}`, can('grains.read'));
   const settings = useGet<any>('settings', '/api/v1/settings', can('settings.read'));
@@ -440,11 +446,11 @@ export function CropPage() {
   const [tab, setTab] = useState('lots');
   const def = BOOK_MAP[crop];
   if (!can('grains.read')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon={crop} label={def?.ur ?? crop} size={34} />{def?.ur ?? crop}</h1>
-    <div className="btn-row">{can('grains.post') && <Link className="btn btn-secondary btn-sm" to={`/erp/grains/${crop}/purchase/new`}>+ خرید (وزن)</Link>}
-      {can('grains.post') && <Link className="btn btn-primary btn-sm" to={`/erp/grains/${crop}/sale/new`}>+ فروخت</Link>}</div></div>
+  return <div><div className="between"><h1 className="head-icon"><NavIcon icon={crop} label={lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)} size={34} />{lang === 'ur' ? (def?.ur ?? crop) : (def?.en ?? crop)}</h1>
+    <div className="btn-row">{can('grains.post') && <Link className="btn btn-secondary btn-sm" to={`/erp/grains/${crop}/purchase/new`}>{lang === 'ur' ? '+ خرید (وزن)' : '+ Purchase (Weight)'}</Link>}
+      {can('grains.post') && <Link className="btn btn-primary btn-sm" to={`/erp/grains/${crop}/sale/new`}>{lang === 'ur' ? '+ فروخت' : '+ Sale'}</Link>}</div></div>
     {settings.data && !maundKg && <div className="notice"><Mark kind="warn" /> «ایک من = کتنے کلو» مالک نے تصدیق نہیں کی — فی من ریٹ بلاک ہے۔</div>}
-    <Tabs tabs={[{ id: 'lots', label: 'لاٹس' }, { id: 'docs', label: 'دستاویزات' }, { id: 'recon', label: 'لاٹ مفاہمت' }]} active={tab} onChange={setTab} />
+    <Tabs tabs={[{ id: 'lots', label: lang === 'ur' ? 'لاٹس' : 'Lots' }, { id: 'docs', label: lang === 'ur' ? 'دستاویزات' : 'Documents' }, { id: 'recon', label: lang === 'ur' ? 'لاٹ مفاہمت' : 'Lot Recon' }]} active={tab} onChange={setTab} />
     {tab === 'lots' && <AsyncView loading={lots.isLoading} error={lots.error} retry={() => lots.refetch()} empty={!(lots.data ?? []).length}>
       <DataTable rows={lots.data ?? []} csvName={`${crop}-lots`} columns={[
         { key: 'lot_no', label: 'لاٹ' }, { key: 'grade', label: 'گریڈ' },
@@ -470,7 +476,7 @@ export function CropPage() {
 
 // --------------------------------- Khata centre ------------------------------
 export function KhataCentre() {
-  const { t } = useApp();
+  const { can, t, lang } = useApp();
   const range = useRange();
   const [book, setBook] = useState('');
   const [party, setParty] = useState('');
@@ -481,46 +487,46 @@ export function KhataCentre() {
   const khata = useGet<any>(q, q);
   const [statement, setStatement] = useState<DocumentSnapshot | null>(null);
   const cols: Column[] = [
-    { key: 'date', label: 'تاریخ' }, { key: 'description_ur', label: 'تفصیل' },
-    { key: 'ref_type', label: 'حوالہ' },
-    { key: 'debit_paisa', label: 'ڈیبٹ', render: (r: any) => money(r.debit_paisa ?? (r.direction === 'IN' ? r.amount_paisa : 0)) },
-    { key: 'credit_paisa', label: 'کریڈٹ', render: (r: any) => money(r.credit_paisa ?? (r.direction === 'OUT' ? r.amount_paisa : 0)) },
-    { key: 'running_paisa', label: 'بیلنس', render: (r: any) => money(r.running_paisa) },
+    { key: 'date', label: lang === 'ur' ? 'تاریخ' : 'Date' }, { key: 'description_ur', label: lang === 'ur' ? 'تفصیل' : 'Description' },
+    { key: 'ref_type', label: lang === 'ur' ? 'حوالہ' : 'Ref' },
+    { key: 'debit_paisa', label: lang === 'ur' ? 'ڈیبٹ' : 'Debit', render: (r: any) => money(r.debit_paisa ?? (r.direction === 'IN' ? r.amount_paisa : 0)) },
+    { key: 'credit_paisa', label: lang === 'ur' ? 'کریڈٹ' : 'Credit', render: (r: any) => money(r.credit_paisa ?? (r.direction === 'OUT' ? r.amount_paisa : 0)) },
+    { key: 'running_paisa', label: lang === 'ur' ? 'بیلنس' : 'Balance', render: (r: any) => money(r.running_paisa) },
   ];
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="khata" label="کھاتہ سینٹر" size={34} />کھاتہ سینٹر</h1>
-    <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">+ رسید</Link>
-      <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">+ ادائیگی</Link></div></div>
+  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="khata" label={lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'} size={34} />{lang === 'ur' ? 'کھاتہ سینٹر' : 'Khata Centre'}</h1>
+    <div className="btn-row"><Link className="btn btn-secondary btn-sm" to="/erp/receipts/new">{lang === 'ur' ? '+ رسید' : '+ Receipt'}</Link>
+      <Link className="btn btn-secondary btn-sm" to="/erp/payments/new">{lang === 'ur' ? '+ ادائیگی' : '+ Payment'}</Link></div></div>
     <div className="grid g2">
-      <div className="card"><h2>تمام کتابیں</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'تمام کھاتہ جات' : 'All Ledgers'}</h2>
         <DataTable rows={[...(books.data?.books ?? []), ...(books.data?.money_books ?? [])]} csvName="khata-books" columns={[
-          { key: 'book_code', label: 'کتاب' }, { key: 'debit_paisa', label: 'ڈیبٹ', money: true },
-          { key: 'credit_paisa', label: 'کریڈٹ', money: true }, { key: 'balance_paisa', label: 'بیلنس', money: true },
+          { key: 'book_code', label: lang === 'ur' ? 'کھاتہ' : 'Ledger' }, { key: 'debit_paisa', label: lang === 'ur' ? 'ڈیبٹ' : 'Debit', money: true },
+          { key: 'credit_paisa', label: lang === 'ur' ? 'کریڈٹ' : 'Credit', money: true }, { key: 'balance_paisa', label: lang === 'ur' ? 'بیلنس' : 'Balance', money: true },
         ] as Column[]} /></div>
-      <div className="card"><h2>وصولی عمر (Ageing)</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'وصولی عمر (Ageing)' : 'Receivables Ageing'}</h2>
         {(ageing.data?.debtors ?? []).length ? <DataTable rows={ageing.data.debtors} csvName="ageing" columns={[
-          { key: 'name_ur', label: 'فریق' }, { key: 'bucket', label: 'مدت' },
-          { key: 'balance_paisa', label: 'بقایا', money: true },
-        ] as Column[]} /> : <EmptyState title="کوئی بقایا نہیں" />}
+          { key: 'name_ur', label: lang === 'ur' ? 'فریق' : 'Party' }, { key: 'bucket', label: lang === 'ur' ? 'مدت' : 'Bucket' },
+          { key: 'balance_paisa', label: lang === 'ur' ? 'بقایا' : 'Due', money: true },
+        ] as Column[]} /> : <EmptyState title={lang === 'ur' ? 'کوئی بقایا نہیں' : 'No balance due'} />}
         <div className="small">{JSON.stringify(ageing.data?.buckets ?? {})}</div></div>
     </div>
-    <div className="card" style={{ marginBlockStart: 16 }}><div className="between"><h2>لیجر</h2>
-      <div className="btn-row"><SelectField label="" value={book} onChange={setBook} placeholder="تمام کتابیں"
-        options={BOOKS.map((b) => ({ value: b.code, label: b.ur }))} />
-        <SelectField label="" value={party} onChange={setParty} placeholder="تمام فریق"
+    <div className="card" style={{ marginBlockStart: 16 }}><div className="between"><h2>{lang === 'ur' ? 'لیجر' : 'Ledger'}</h2>
+      <div className="btn-row"><SelectField label="" value={book} onChange={setBook} placeholder={lang === 'ur' ? 'تمام کھاتہ جات' : 'All Ledgers'}
+        options={BOOKS.map((b) => ({ value: b.code, label: lang === 'ur' ? b.ur : (b.en || b.ur) }))} />
+        <SelectField label="" value={party} onChange={setParty} placeholder={lang === 'ur' ? 'تمام فریق' : 'All Parties'}
           options={(parties.data ?? []).map((p: any) => ({ value: p.id, label: p.name_ur }))} />
         <Button variant="ghost" size="sm" onClick={async () => {
           const r = await api<any>(`/api/v1/statements?from=${range.from}&to=${range.to}&book=${book}&party_id=${party}`);
           setStatement(r.snapshot);
-        }}>اسٹیٹمنٹ</Button></div></div>
+        }}>{lang === 'ur' ? 'اسٹیٹمنٹ' : 'Statement'}</Button></div></div>
       <AsyncView loading={khata.isLoading} error={khata.error} retry={() => khata.refetch()} empty={!(khata.data?.withBalance ?? []).length}>
-        <div className="kv"><span className="k">ابتدائی</span><span className="v num">{formatPKR(khata.data?.opening_paisa ?? 0)}</span>
-          <span className="k">ڈیبٹ</span><span className="v num">{formatPKR(khata.data?.debit_paisa ?? 0)}</span>
-          <span className="k">کریڈٹ</span><span className="v num">{formatPKR(khata.data?.credit_paisa ?? 0)}</span>
-          <span className="k">اختتامی</span><span className="v num">{formatPKR(khata.data?.closing_balance_paisa ?? 0)}</span></div>
+        <div className="kv"><span className="k">{lang === 'ur' ? 'ابتدائی' : 'Opening'}</span><span className="v num">{formatPKR(khata.data?.opening_paisa ?? 0)}</span>
+          <span className="k">{lang === 'ur' ? 'ڈیبٹ' : 'Debit'}</span><span className="v num">{formatPKR(khata.data?.debit_paisa ?? 0)}</span>
+          <span className="k">{lang === 'ur' ? 'کریڈٹ' : 'Credit'}</span><span className="v num">{formatPKR(khata.data?.credit_paisa ?? 0)}</span>
+          <span className="k">{lang === 'ur' ? 'اختتامی' : 'Closing'}</span><span className="v num">{formatPKR(khata.data?.closing_balance_paisa ?? 0)}</span></div>
         <DataTable rows={khata.data?.withBalance ?? []} columns={cols} csvName="khata-ledger" />
       </AsyncView>
     </div>
-    {statement && <Sheet open={!!statement} onClose={() => setStatement(null)} title="کھاتہ اسٹیٹمنٹ">
+    {statement && <Sheet open={!!statement} onClose={() => setStatement(null)} title={lang === 'ur' ? 'کھاتہ اسٹیٹمنٹ' : 'Ledger Statement'}>
       <PrintActions snapshot={statement} /></Sheet>}
   </div>;
 }
@@ -569,6 +575,7 @@ const REPORTS = [
   { id: 'grain-summary', ur: 'اجناس خلاصہ', en: 'Grain summary' },
 ];
 export function ReportsGallery() {
+  const { lang } = useApp();
   const [params, setParams] = useSearchParams();
   const active = params.get('report') ?? 'trial-balance';
   const range = useRange();
@@ -582,15 +589,15 @@ export function ReportsGallery() {
     key: k, label: k.replace(/_paisa$/, ' (Rs)').replace(/_milli$/, ''),
     render: k.endsWith('_paisa') ? (r: any) => money(r[k]) : k.endsWith('_milli') ? (r: any) => <span className="num">{fromMilli(r[k])}</span> : undefined,
   })) : [];
-  return <div><h1 className="head-icon"><NavIcon icon="reports" label="رپورٹس گیلری" size={34} />رپورٹس گیلری</h1>
+  return <div><h1 className="head-icon"><NavIcon icon="reports" label={lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'} size={34} />{lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'}</h1>
     <div className="tile-grid">{REPORTS.map((r) => <button key={r.id} className={`tile ${active === r.id ? 'active' : ''}`}
-      onClick={() => setParams({ report: r.id })}><NavIcon icon="reports" label={r.ur} size={44} /><strong>{r.ur}</strong><span className="small">{r.en}</span></button>)}</div>
+      onClick={() => setParams({ report: r.id })}><NavIcon icon="reports" label={lang === 'ur' ? r.ur : r.en} size={44} /><strong>{lang === 'ur' ? r.ur : r.en}</strong><span className="small">{lang === 'ur' ? r.en : r.ur}</span></button>)}</div>
     <div className="card" style={{ marginBlockStart: 16 }}>
-      <div className="between"><h2>{REPORTS.find((r) => r.id === active)?.ur}</h2>
-        <div className="btn-row"><SelectField label="" value={book} onChange={setBook} placeholder="تمام کتابیں"
-          options={BOOKS.map((b) => ({ value: b.code, label: b.ur }))} />
+      <div className="between"><h2>{lang === 'ur' ? (REPORTS.find((r) => r.id === active)?.ur) : (REPORTS.find((r) => r.id === active)?.en || REPORTS.find((r) => r.id === active)?.ur)}</h2>
+        <div className="btn-row"><SelectField label="" value={book} onChange={setBook} placeholder={lang === 'ur' ? 'تمام کھاتہ جات' : 'All Ledgers'}
+          options={BOOKS.map((b) => ({ value: b.code, label: lang === 'ur' ? b.ur : (b.en || b.ur) }))} />
           <Button variant="ghost" size="sm" onClick={() => window.print()}><Mark kind="print" /> PDF</Button>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label="دوبارہ لوڈ"><Mark kind="sync" /></Button></div></div>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} aria-label={lang === 'ur' ? 'دوبارہ لوڈ' : 'Reload'}><Mark kind="sync" /></Button></div></div>
       <RangePicker from={range.from} to={range.to} setFrom={range.setFrom} setTo={range.setTo} />
       {active === 'trial-balance' && data && <div className={`notice ${data.balanced ? 'success' : ''}`}>
         {data.balanced ? <><Mark kind="check" /> ڈیبٹ = کریڈٹ (H4)</> : <><Mark kind="warn" /> جرنل غیر متوازن</>} — ڈیبٹ {formatPKR(data.totals?.debit_paisa ?? 0)} / کریڈٹ {formatPKR(data.totals?.credit_paisa ?? 0)}</div>}
@@ -624,8 +631,8 @@ export function DocumentsCentre() {
   /** Legacy rows were posted before snapshots carried doc_id; the row id IS the document ULID,
    *  so it is the correct fallback for printing/verification. */
   const snapshot = selected ? { ...selected.snapshot, doc_id: selected.snapshot?.doc_id ?? selected.id } : null;
-  return <div><h1 className="head-icon"><NavIcon icon="documents" label="دستاویزات سینٹر" size={34} />دستاویزات سینٹر</h1>
-    <div className="toolbar no-print"><input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نمبر / نام تلاش کریں" />
+  return <div><h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'} size={34} />{lang === 'ur' ? 'دستاویزات سینٹر' : 'Documents Centre'}</h1>
+    <div className="toolbar no-print"><input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={lang === 'ur' ? 'نمبر / نام تلاش کریں' : 'Search number / name'} />
       <SelectField label="" value={type} onChange={setType} placeholder="تمام اقسام"
         options={['SALE', 'PURCHASE', 'RECEIPT', 'PAYMENT', 'EXPENSE', 'GRAIN_PURCHASE', 'GRAIN_SALE', 'RETURN', 'PAYROLL', 'TRANSFER'].map((x) => ({ value: x, label: x }))} />
       <SelectField label={t('invoices')} value={selected?.id ?? ''} onChange={pick} placeholder={t('selectInvoice')}
@@ -677,34 +684,34 @@ export function DocumentsCentre() {
 
 // --------------------------------- Sync centre -------------------------------
 export function SyncCentre() {
-  const { syncNow, syncing, pending, conflicts, online, lastSync, toast } = useApp();
+  const { syncNow, syncing, pending, conflicts, online, lastSync, toast, lang } = useApp();
   const ops = useGet<any[]>('sync-ops', '/api/v1/sync/operations');
   const serverConflicts = useGet<any[]>('sync-conflicts', '/api/v1/sync/conflicts');
   const [localOps, setLocalOps] = useState<any[]>([]);
   const [resolve, setResolve] = useState<any>(null), [reason, setReason] = useState('');
   useEffect(() => { void ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray().then(setLocalOps); }, [pending, conflicts]);
-  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="sync" label="سنک سینٹر" size={34} />سنک سینٹر</h1>
-    <Button onClick={async () => { const r = await syncNow(); toast(`${r.sent} کامیاب، ${r.conflicts} تضاد`); ops.refetch(); setLocalOps(await ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray()); }} loading={syncing}>ابھی سنک کریں</Button></div>
+  return <div><div className="between"><h1 className="head-icon"><NavIcon icon="sync" label={lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'} size={34} />{lang === 'ur' ? 'سنک سینٹر' : 'Sync Centre'}</h1>
+    <Button onClick={async () => { const r = await syncNow(); toast(`${r.sent} ${lang === 'ur' ? 'کامیاب' : 'sent'}, ${r.conflicts} ${lang === 'ur' ? 'تضاد' : 'conflicts'}`); ops.refetch(); setLocalOps(await ztdb.outbox.orderBy('created_at').reverse().limit(100).toArray()); }} loading={syncing}>{lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}</Button></div>
     <div className="stats-grid">
-      <StatCard label="نیٹ ورک" value={online ? 'آن لائن' : 'آف لائن'} />
-      <StatCard label="مقامی قطار" value={pending} />
-      <StatCard label="مقامی تضادات" value={conflicts} tone={conflicts ? 'var(--danger)' : undefined} />
-      <StatCard label="آخری سنک" value={lastSync ?? '—'} /></div>
+      <StatCard label={lang === 'ur' ? 'نیٹ ورک' : 'Network'} value={online ? (lang === 'ur' ? 'آن لائن' : 'Online') : (lang === 'ur' ? 'آف لائن' : 'Offline')} />
+      <StatCard label={lang === 'ur' ? 'مقامی قطار' : 'Local Queue'} value={pending} />
+      <StatCard label={lang === 'ur' ? 'مقامی تضادات' : 'Local Conflicts'} value={conflicts} tone={conflicts ? 'var(--danger)' : undefined} />
+      <StatCard label={lang === 'ur' ? 'آخری سنک' : 'Last Sync'} value={lastSync ?? '—'} /></div>
     <div className="notice info small">Background Sync کافی نہیں: ایپ کھلنے، <code>online</code> ایونٹ، نظر آتے وقت 60 سیکنڈ ٹائمر اور دستی «ابھی سنک کریں» — چاروں triggers فعال ہیں۔
       ہر آپریشن کا <code>idempotency_key</code> منفرد ہے؛ دو آلات پر آخری اسٹاک بیچنے پر خاموش اوور رائٹ نہیں، بلکہ CONFLICT فلیگ بنتا ہے۔</div>
-    <div className="card"><h2>مقامی آؤٹ باکس (IndexedDB)</h2>
+    <div className="card"><h2>{lang === 'ur' ? 'مقامی آؤٹ باکس (IndexedDB)' : 'Local Outbox (IndexedDB)'}</h2>
       <DataTable rows={localOps} csvName="local-outbox" columns={[
-        { key: 'type', label: 'قسم' }, { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
-        { key: 'tries', label: 'کوششیں' }, { key: 'server_number', label: 'سرور نمبر' },
-        { key: 'error', label: 'خرابی' },
+        { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
+        { key: 'tries', label: lang === 'ur' ? 'کوششیں' : 'Tries' }, { key: 'server_number', label: lang === 'ur' ? 'سرور نمبر' : 'Server Number' },
+        { key: 'error', label: lang === 'ur' ? 'خرابی' : 'Error' },
       ] as Column[]} /></div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>سرور آپریشنز</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'سرور آپریشنز' : 'Server Operations'}</h2>
       <AsyncView loading={ops.isLoading} error={ops.error} retry={() => ops.refetch()} empty={!(ops.data ?? []).length}>
         <DataTable rows={ops.data ?? []} csvName="server-sync" columns={[
-          { key: 'type', label: 'قسم' }, { key: 'status', label: 'حالت', render: (r: any) => <StatusChip status={r.status} /> },
-          { key: 'device_id', label: 'ڈیوائس' }, { key: 'error', label: 'خرابی' },
+          { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
+          { key: 'device_id', label: lang === 'ur' ? 'ڈیوائس' : 'Device' }, { key: 'error', label: lang === 'ur' ? 'خرابی' : 'Error' },
         ] as Column[]} /></AsyncView></div>
-    <div className="card"><h2>تضادات</h2>
+    <div className="card"><h2>{lang === 'ur' ? 'تضادات' : 'Conflicts'}</h2>
       <AsyncView loading={serverConflicts.isLoading} error={serverConflicts.error} retry={() => serverConflicts.refetch()} empty={!(serverConflicts.data ?? []).length}>
         <DataTable rows={serverConflicts.data ?? []} csvName="conflicts" onRow={(r) => setResolve(r)} columns={[
           { key: 'code', label: 'کوڈ' }, { key: 'message_ur', label: 'پیغام' },

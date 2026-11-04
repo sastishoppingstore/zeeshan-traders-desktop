@@ -90,7 +90,14 @@ export function createApp(): H {
     const path = c.req.path;
     if (c.env.ASSETS) {
       const res = await c.env.ASSETS.fetch(c.req.raw);
-      if (!(res.headers.get('content-type') ?? '').includes('text/html')) return res;
+      if (!(res.headers.get('content-type') ?? '').includes('text/html')) {
+        if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/icons/') || path.startsWith('/images/') || path.startsWith('/brand/')) {
+          const h = new Headers(res.headers);
+          h.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return new Response(res.body, { status: res.status, headers: h });
+        }
+        return res;
+      }
       const html = await socialHtml(c.get('db')!, new URL(c.req.url).origin, path, await res.text());
       return new Response(html, { status: res.status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
     }

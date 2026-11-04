@@ -181,11 +181,15 @@ export function productMedia(p: {
   for (const t of tokens(p.name_en, p.name_ur, p.sku, p.brand_en, p.brand_ur)) {
     const hit = PRODUCT_TOKEN_MEDIA[t] ?? PRODUCT_TOKEN_MEDIA[t.replace(/s$/, '')];
     if (hit) {
-      return { src: IMAGES[hit as ImageKey].lg, alt: `${p.name_ur || ''} ${p.name_en || ''}`.trim(), source: 'asset' };
+      const asset = (IMAGES as Record<string, any>)[hit];
+      return { src: asset?.md ?? asset?.lg ?? '', alt: `${p.name_ur || ''} ${p.name_en || ''}`.trim(), source: 'asset' };
     }
   }
   const cat = categoryMedia({ code: p.category_code, slug: p.category_slug }) ?? categoryByName(p.category_ur, p.category_en);
-  if (cat) return { src: IMAGES[cat.key].lg, alt: cat.alt_ur, source: 'asset' };
+  if (cat) {
+    const asset = (IMAGES as Record<string, any>)[cat.key];
+    return { src: asset?.md ?? asset?.lg ?? '', alt: cat.alt_ur, source: 'asset' };
+  }
   return undefined;
 }
 

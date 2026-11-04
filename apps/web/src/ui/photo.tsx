@@ -47,12 +47,14 @@ function monogram(text: string): string {
 /** Resolve a central-map entry to a URL without every call site importing IMAGES. */
 export function refSrc(ref: PhotoRef | undefined, variant: ImageVariant = 'md'): string | undefined {
   if (!ref) return undefined;
-  return IMAGES[ref.key as ImageKey]?.[variant];
+  const asset = (IMAGES as Record<string, any>)[ref.key];
+  return asset?.[variant] ?? asset?.md ?? asset?.lg;
 }
 
 export function keySrc(key: string | undefined, variant: ImageVariant = 'md'): string | undefined {
   if (!key) return undefined;
-  return IMAGES[key as ImageKey]?.[variant];
+  const asset = (IMAGES as Record<string, any>)[key];
+  return asset?.[variant] ?? asset?.md ?? asset?.lg;
 }
 
 export { IMAGES };

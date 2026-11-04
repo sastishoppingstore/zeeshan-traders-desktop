@@ -59,7 +59,8 @@ function GoalCategorySlider({ categories }: { categories: any[] }) {
       <div className="cat-slider-track" ref={trackRef} tabIndex={0} role="region"
         aria-label={lang === 'ur' ? 'زمرے' : 'Categories'}>
         {categories.map((c) => {
-          const photo = c.photo ? IMAGES[c.photo.key as keyof typeof IMAGES]?.md : null;
+          const imgAsset = c.photo ? (IMAGES as Record<string, any>)[c.photo.key] : null;
+          const photo = imgAsset?.sm ?? imgAsset?.md ?? null;
           const name = bi(c.name_ur, c.name_en);
           return (
             <Link key={c.id || c.slug} to={`/category/${c.slug}`} className="cat-goal-item">
@@ -91,7 +92,8 @@ export function Home() {
   const { t, lang, bi } = useApp();
   const { data, isLoading, error, refetch } = useGet<any>('public-home', '/api/v1/public/home');
   const b = data?.business ?? BUSINESS_PROFILE;
-  const bgKey = data?.banners?.[0]?.image_r2_key ? mediaUrl(data.banners[0].image_r2_key) : IMAGES[HERO_BG.key].lg;
+  const heroBgAsset = !data?.banners?.[0]?.image_r2_key ? IMAGES[HERO_BG.key] : null;
+  const bgKey = data?.banners?.[0]?.image_r2_key ? mediaUrl(data.banners[0].image_r2_key) : heroBgAsset?.lg;
   const heroRef = React.useRef<HTMLDivElement | null>(null);
   useParallax(heroRef);
 
@@ -130,8 +132,17 @@ export function Home() {
   ];
 
   const shell = <section className="pub-hero" ref={heroRef}>
-    <div className="pub-hero-media kb" style={{ transform: 'translate3d(0, calc(var(--parallax, 0) * 40px), 0)' }}>
-      <img src={bgKey} alt="" {...{ fetchpriority: 'high' }} decoding="async" width={1600} height={1360} />
+    <div className="pub-hero-media" style={{ transform: 'translate3d(0, calc(var(--parallax, 0) * 40px), 0)' }}>
+      <img
+        src={heroBgAsset ? heroBgAsset.md : bgKey}
+        srcSet={heroBgAsset ? `${heroBgAsset.md} 900w, ${heroBgAsset.lg} 1600w` : undefined}
+        sizes="100vw"
+        alt=""
+        {...{ fetchpriority: 'high' }}
+        decoding="async"
+        width={1600}
+        height={1360}
+      />
     </div>
     <div className="pub-hero-scrim" aria-hidden="true" />
     <GoldDust count={16} />

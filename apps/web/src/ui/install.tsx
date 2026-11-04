@@ -105,7 +105,7 @@ export function InstallPrompt() {
     role="dialog" aria-modal="true" aria-labelledby="install-title">
     <div className="install-card" ref={card}>
       <span className="handle" aria-hidden="true" />
-      <img className="install-icon" src="/brand/logo-96.png" alt="" width={56} height={56} />
+      <img className="install-icon" src="/brand/logo-96.webp" alt="" width={56} height={56} />
       <h2 id="install-title">{ur ? 'ایپ طور پر انسٹال کریں' : 'Install the app'}</h2>
       <p>{ur
         ? 'دکان، آج کے ریٹ اور کھاتہ ہوم اسکرین پر — آف لائن بھی کھلتا ہے۔'

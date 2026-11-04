@@ -3,10 +3,10 @@
  * Background Sync is not available on iOS Safari/Firefox, so the app also syncs on
  * open, on 'online', on a visibility timer and via the manual "Sync Now" button.
  */
-const CACHE = 'zt-shell-v4';
+const CACHE = 'zt-shell-v5';
 const SHELL = [
   '/', '/erp', '/index.html', '/manifest.webmanifest',
-  '/brand/logo-96.png',
+  '/brand/logo-96.webp', '/brand/logo-96.png',
   '/icons/icon-32.png', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon.png',
   '/fonts/naskh-400.woff2', '/fonts/naskh-600.woff2', '/fonts/naskh-700.woff2',

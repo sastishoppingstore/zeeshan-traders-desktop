@@ -15,7 +15,7 @@ import { formatPKR } from '@zt/shared';
 const STEP = 90;
 const AUTO_MS = 4200;
 /** Degrees per pixel of pointer travel, so a short flick still turns the box. */
-const DRAG_SENSITIVITY = 0.55;
+const DRAG_SENSITIVITY = 0.85;
 
 /** A cube face is either a brand photo or a catalogue product — the card renders whichever arrives. */
 export type CubeFace =

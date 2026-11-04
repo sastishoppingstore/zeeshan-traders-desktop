@@ -1,0 +1,11 @@
+# Zeeshan Traders
+
+> Agricultural dealership located at Maqsood Chowk, District Layyah, Punjab, Pakistan. Serving farmers and traders with certified fertilizers, pesticides, seeds, animal feeds, cement, and grains.
+
+## Main Resources
+- [Home](https://zt-v2.sastishopping-store.workers.dev/): Storefront with product showcases, rates, and business information
+- [Products](https://zt-v2.sastishopping-store.workers.dev/products): Catalogue of fertilizers, seeds, choker, wanda, cement, and grains
+- [Categories](https://zt-v2.sastishopping-store.workers.dev/categories): Directory of all agricultural departments
+- [Public API](https://zt-v2.sastishopping-store.workers.dev/api/v1/public/products): Public REST API endpoint for catalogue
+- [Enquiry](https://zt-v2.sastishopping-store.workers.dev/enquiry): Order and rate inquiry form
+- [Contact](https://zt-v2.sastishopping-store.workers.dev/contact): Location details, WhatsApp, and phone contacts
