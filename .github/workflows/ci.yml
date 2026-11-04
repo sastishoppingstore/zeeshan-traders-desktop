@@ -1,0 +1,33 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm install --no-audit --no-fund
+      - name: TypeScript (strict)
+        run: npm run typecheck
+      - name: Unit + integration + route matrix
+        run: npm test
+      - name: EXPLAIN QUERY PLAN gate (fails on full scans of big tables)
+        run: npm run query:plan
+      - name: Build web PWA
+        run: npm run build:web
+      - name: Apply all migrations to a fresh local DB
+        run: npm run migrate:local
+      - name: Regenerate system seed must be deterministic
+        run: |
+          cp migrations/0002_system_seed.sql /tmp/seed-before.sql
+          npm run seed:generate
+          diff -q /tmp/seed-before.sql migrations/0002_system_seed.sql
+      - name: Upload query-plan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: query-plan-report, path: .dev/query-plan-report.json }

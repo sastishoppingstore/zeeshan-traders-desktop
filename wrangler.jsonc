@@ -1,0 +1,62 @@
+{
+  // Cloudflare Workers + Static Assets + D1 + R2 configuration.
+  // NOT YET APPLIED: no Cloudflare account/domain access was provided, so nothing is deployed.
+  // Before deploying, verify every limit/price against live Cloudflare docs (see docs/ASSUMPTIONS.md)
+  // and set secrets with `wrangler secret put ... --env staging|production`.
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "zeeshan-traders",
+  "main": "apps/worker/src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations_dir": "migrations",
+  "assets": {
+    "directory": "apps/web/dist",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    "DEFAULT_LANG": "ur",
+    "TIMEZONE": "Asia/Karachi",
+    "CURRENCY": "PKR"
+  },
+  "triggers": {
+    // 00:00 Pakistan Standard Time = 19:00 UTC previous day.
+    "crons": ["0 19 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zt-staging",
+      "database_id": "REPLACE_WITH_REAL_D1_UUID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "zt-private-staging" }
+  ],
+  "env": {
+    "staging": {
+      "name": "zeeshan-traders-staging",
+      "vars": { "ENVIRONMENT": "staging", "DEFAULT_LANG": "ur", "TIMEZONE": "Asia/Karachi", "CURRENCY": "PKR" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "zt-staging", "database_id": "REPLACE_WITH_REAL_D1_UUID", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [ { "binding": "FILES", "bucket_name": "zt-private-staging" } ],
+      "assets": { "directory": "apps/web/dist", "binding": "ASSETS" },
+      "triggers": { "crons": ["0 19 * * *"] }
+    },
+    "production": {
+      "name": "zeeshan-traders",
+      "vars": { "ENVIRONMENT": "production", "DEFAULT_LANG": "ur", "TIMEZONE": "Asia/Karachi", "CURRENCY": "PKR" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "zt-production", "database_id": "REPLACE_WITH_REAL_D1_UUID", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [ { "binding": "FILES", "bucket_name": "zt-private-production" } ],
+      "assets": { "directory": "apps/web/dist", "binding": "ASSETS" },
+      "triggers": { "crons": ["0 19 * * *"] }
+    }
+  }
+  // Required secrets (NEVER hard-code, NEVER expose EXPOSE_SETUP_TOKEN in production):
+  //   SETUP_TOKEN, SESSION_SECRET, DATA_ENCRYPTION_KEY, BACKUP_ENCRYPTION_KEY
+  // The one-time SETUP_TOKEN is printed to the deploy operator's terminal at deploy time.
+}

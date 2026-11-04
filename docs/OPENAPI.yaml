@@ -1,0 +1,280 @@
+openapi: 3.1.0
+info:
+  title: Zeeshan Traders API
+  version: 2.0.0
+  description: |
+    One Hono Worker API for the public Urdu catalogue and the private ERP/khata.
+    All money is INTEGER paisa; all quantities are INTEGER milli-units of the declared base unit.
+    Responses are `{ "ok": true, "data": ... }` or `{ "ok": false, "error": { code, message_ur, message_en, field_errors? } }`.
+    Base URL in production: https://<owner-domain>/api/v1. Local preview: http://0.0.0.0:3000/api/v1.
+servers:
+  - url: /api/v1
+    description: Same-origin (browser uses relative URLs)
+security:
+  - sessionCookie: []
+    csrfHeader: []
+tags:
+  - name: public
+  - name: auth
+  - name: catalogue
+  - name: transactions
+  - name: reports
+  - name: ops
+paths:
+  /setup/status:
+    get:
+      tags: [auth]
+      security: []
+      summary: Setup state; local preview only exposes a one-time setup token
+      responses:
+        '200': { description: setup_complete, owner_exists, business, local_preview, setup_token? }
+  /setup:
+    post:
+      tags: [auth]
+      security: []
+      summary: One-time owner creation (requires SETUP_TOKEN secret; never re-runnable)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [setup_token, owner, maund_kg, maund_confirmed]
+              properties:
+                setup_token: { type: string }
+                owner: { type: object, required: [name, username, mobile, password], properties: { name: { type: string }, username: { type: string }, mobile: { type: string, pattern: '^03\d{2}[- ]?\d{7}$' }, password: { type: string, minLength: 10 } } }
+                business: { type: object }
+                maund_kg: { type: integer, minimum: 1, maximum: 100 }
+                maund_confirmed: { const: true }
+                opening_balances: { type: array, items: { type: object } }
+                fiscal_start_month: { type: integer, minimum: 1, maximum: 12, default: 7 }
+                regulatory: { type: object }
+      responses:
+        '201': { description: user_id, csrf, setup_complete }
+        '403': { $ref: '#/components/responses/Error' }
+  /auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: PBKDF2 password login; sets secure zt_session + zt_csrf cookies
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [username, password], properties: { username: { type: string }, password: { type: string }, device_id: { type: string }, device_name: { type: string } } } } } }
+      responses: { '200': { description: session + csrf }, '401': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/Error' } }
+  /auth/logout:
+    post: { tags: [auth], summary: Revoke session and clear cookies, responses: { '200': { description: ok } } }
+  /auth/me:
+    get: { tags: [auth], summary: Current user, roles and permissions, responses: { '200': { description: Session }, '401': { $ref: '#/components/responses/Error' } } }
+  /public/home:
+    get:
+      tags: [public]
+      security: []
+      summary: Public home (categories, featured, new arrivals, business profile, announcements); Cache-Control max-age=180
+      responses: { '200': { description: PublicHome } }
+  /public/categories:
+    get: { tags: [public], security: [], summary: Published categories with product counts, responses: { '200': { description: array } } }
+  /public/products:
+    get:
+      tags: [public]
+      security: []
+      summary: Whitelisted catalogue rows, keyset paginated, cached 120 s
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: brand, schema: { type: string } }
+        - { in: query, name: sort, schema: { type: string, enum: [name, new, featured, price] } }
+        - { in: query, name: cursor, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, maximum: 50, default: 25 } }
+      responses: { '200': { description: rows + next_cursor }, '429': { $ref: '#/components/responses/Error' } }
+  /public/product/{slug}:
+    get: { tags: [public], security: [], summary: Whitelisted product detail + JSON-LD, parameters: [{ in: path, name: slug, required: true, schema: { type: string } }], responses: { '200': { description: product + related }, '404': { $ref: '#/components/responses/Error' } } }
+  /public/pages/{slug}:
+    get: { tags: [public], security: [], summary: PUBLISHED CMS page only, parameters: [{ in: path, name: slug, required: true, schema: { type: string } }], responses: { '200': { description: sanitised page }, '404': { $ref: '#/components/responses/Error' } } }
+  /public/enquiry:
+    post:
+      tags: [public]
+      security: []
+      summary: Contact enquiry; honeypot + 1200 ms time trap + consent + 5/hour rate limit
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [customer_name, mobile, city, consent], properties: { customer_name: { type: string }, mobile: { type: string }, city: { type: string }, message: { type: string }, consent: { const: true }, items: { type: array, items: { type: object } }, honeypot: { type: string, maxLength: 0 }, elapsed_ms: { type: integer } } } } } }
+      responses: { '201': { description: reference number }, '400': { $ref: '#/components/responses/Error' }, '429': { $ref: '#/components/responses/Error' } }
+  /products:
+    get: { tags: [catalogue], summary: Private product list with stock (keyset), responses: { '200': { description: rows + next_cursor } } }
+    post: { tags: [catalogue], summary: Create product (catalogue starts EMPTY in production), requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }, responses: { '201': { description: id + slug } } }
+  /products/{id}:
+    get: { tags: [catalogue], parameters: [{ in: path, name: id, required: true, schema: { type: string } }], responses: { '200': { description: product + images + batches } } }
+    put: { tags: [catalogue], summary: Optimistic-concurrency update (version must match), parameters: [{ in: path, name: id, required: true, schema: { type: string } }], responses: { '200': { description: id + version }, '409': { $ref: '#/components/responses/Error' } } }
+  /products/{id}/publish:
+    post: { tags: [catalogue], summary: Publish/unpublish and purge public cache, parameters: [{ in: path, name: id, required: true, schema: { type: string } }], responses: { '200': { description: is_published } } }
+  /import/products/preview:
+    post: { tags: [catalogue], summary: Validate CSV rows WITHOUT writing, responses: { '200': { description: rows + valid + duplicates } } }
+  /import/products/confirm:
+    post: { tags: [catalogue], summary: One atomic db.batch() insert/update, responses: { '200': { description: created, updated, skipped } } }
+  /catalogue/export:
+    get: { tags: [catalogue], summary: CSV export (text/csv, UTF-8 BOM), responses: { '200': { description: CSV } } }
+  /categories:
+    get: { tags: [catalogue], responses: { '200': { description: array } } }
+    post: { tags: [catalogue], responses: { '201': { description: id } } }
+  /brands: { get: { tags: [catalogue], responses: { '200': { description: array } } }, post: { tags: [catalogue], responses: { '201': { description: id } } } }
+  /units: { get: { tags: [catalogue], responses: { '200': { description: array } } }, post: { tags: [catalogue], responses: { '201': { description: ok } } } }
+  /images:
+    post: { tags: [catalogue], summary: Private R2 / local upload; 501 INCOMPLETE_R2 when no binding, requestBody: { required: true, content: { application/json: { schema: { type: object, required: [product_id, data_url], properties: { product_id: { type: string }, data_url: { type: string }, alt_ur: { type: string }, is_primary: { type: boolean } } } } } }, responses: { '201': { description: id + url }, '501': { $ref: '#/components/responses/Error' } } }
+  /purchases:
+    post: { tags: [transactions], summary: Atomic purchase posting, requestBody: { $ref: '#/components/requestBodies/Document' }, responses: { '201': { description: number, id, total_paisa, due_paisa } } }
+    get: { tags: [transactions], responses: { '200': { description: array } } }
+  /sales:
+    post: { tags: [transactions], summary: Atomic sale posting with weighted-average COGS (header inserted before items), requestBody: { $ref: '#/components/requestBodies/Document' }, responses: { '201': { description: number, id, total_paisa, due_paisa } } }
+    get: { tags: [transactions], responses: { '200': { description: array } } }
+  /returns:
+    post: { tags: [transactions], summary: Reversal + replacement (posted rows never edited), responses: { '201': { description: return document } } }
+    get: { tags: [transactions], responses: { '200': { description: sales_returns + purchase_returns } } }
+  /grains/{crop}/purchase:
+    post: { tags: [transactions], summary: Grain purchase with integer-gram net weight, parameters: [{ in: path, name: crop, required: true, schema: { $ref: '#/components/schemas/Crop' } }], responses: { '201': { description: lot + arithmetic } } }
+  /grains/{crop}/sale:
+    post: { tags: [transactions], summary: Grain sale from a lot (balance enforced), parameters: [{ in: path, name: crop, required: true, schema: { $ref: '#/components/schemas/Crop' } }], responses: { '201': { description: number + margin (owner/manager only) } } }
+  /grains/lots:
+    get: { tags: [transactions], responses: { '200': { description: lots + balance_grams } } }
+  /parties: { get: { tags: [transactions], responses: { '200': { description: array } } }, post: { tags: [transactions], responses: { '201': { description: id } } } }
+  /parties/{id}: { get: { tags: [transactions], responses: { '200': { description: party + ledger + allocations } } } }
+  /receipts: { post: { tags: [transactions], summary: AUTO/MANUAL/ADVANCE allocation, responses: { '201': { description: number } } }, get: { tags: [transactions], responses: { '200': { description: array } } } }
+  /payments: { post: { tags: [transactions], responses: { '201': { description: number } } }, get: { tags: [transactions], responses: { '200': { description: array } } } }
+  /accounts: { get: { tags: [transactions], responses: { '200': { description: 4 money books + balances } } } }
+  /accounts/{id}: { get: { tags: [transactions], responses: { '200': { description: account + transactions } } } }
+  /transfers: { post: { tags: [transactions], summary: Transfer between money books (no income/expense), responses: { '201': { description: number } } } }
+  /jazzcash: { post: { tags: [transactions], summary: JazzCash book entry + fee expense (no bank API), responses: { '201': { description: number } } } }
+  /expenses: { get: { tags: [transactions], responses: { '200': { description: array } } }, post: { tags: [transactions], responses: { '201': { description: number } } } }
+  /employees: { get: { tags: [transactions], responses: { '200': { description: array } } }, post: { tags: [transactions], responses: { '201': { description: id } } } }
+  /advances: { get: { tags: [transactions], responses: { '200': { description: array } } }, post: { tags: [transactions], responses: { '201': { description: id } } } }
+  /payroll: { post: { tags: [transactions], summary: One atomic batch, consecutive SL numbers reserved, responses: { '201': { description: numbers } } } }
+  /payroll/{ym}: { get: { tags: [transactions], responses: { '200': { description: salary records } } } }
+  /stock: { get: { tags: [transactions], responses: { '200': { description: balances } } } }
+  /stock/ledger: { get: { tags: [transactions], responses: { '200': { description: movements } } } }
+  /stock/batches: { get: { tags: [transactions], responses: { '200': { description: FEFO batches } } } }
+  /stock/opening: { post: { tags: [transactions], responses: { '201': { description: ok } } } }
+  /stock/adjustment: { post: { tags: [transactions], responses: { '201': { description: ok } } } }
+  /stock/count: { post: { tags: [transactions], responses: { '201': { description: count + deltas } } } }
+  /accounting/journal: { post: { tags: [transactions], summary: Balanced manual journal (debit = credit enforced), responses: { '201': { description: entry } } } }
+  /accounting/period-close: { post: { tags: [transactions], responses: { '200': { description: period locked } } } }
+  /dashboard: { get: { tags: [reports], summary: Pre-aggregated totals, alerts, recent docs, charts, responses: { '200': { description: Dashboard } } } }
+  /khata: { get: { tags: [reports], summary: Party/book/money ledger with running balance, responses: { '200': { description: Ledger } } } }
+  /khata/books: { get: { tags: [reports], responses: { '200': { description: books + money_books } } } }
+  /khata/ageing: { get: { tags: [reports], responses: { '200': { description: debtors + buckets } } } }
+  /statements: { get: { tags: [reports], summary: Re-renderable khata statement snapshot, responses: { '200': { description: snapshot } } } }
+  /reports/{name}:
+    get:
+      tags: [reports]
+      summary: trial-balance | pnl | balance-sheet | daybook | cashbook | stock | expiry | pesticide-register | fertilizer-register | reconcile
+      parameters: [{ in: path, name: name, required: true, schema: { type: string } }, { in: query, name: from, schema: { type: string, format: date } }, { in: query, name: to, schema: { type: string, format: date } }, { in: query, name: book, schema: { type: string } }]
+      responses: { '200': { description: report-specific } }
+  /documents: { get: { tags: [reports], summary: Posted documents (JSON snapshot + template_version saved), responses: { '200': { description: array } } } }
+  /documents/{id}: { get: { tags: [reports], responses: { '200': { description: document + snapshot } } } }
+  /integrity: { get: { tags: [reports], responses: { '200': { description: integrity result } } } }
+  /integrity/run: { post: { tags: [reports], responses: { '200': { description: integrity result } } } }
+  /accounting/chart: { get: { tags: [reports], responses: { '200': { description: 67 accounts } } } }
+  /accounting/journals: { get: { tags: [reports], responses: { '200': { description: entries } } } }
+  /audit: { get: { tags: [reports], responses: { '200': { description: audit rows } } } }
+  /settings: { get: { tags: [ops], responses: { '200': { description: key -> value } } }, put: { tags: [ops], summary: Whitelisted setting update + audit + cache purge, responses: { '200': { description: key } } } }
+  /usage: { get: { tags: [ops], summary: D1 rows read/written with 70 % free-cap warning thresholds, responses: { '200': { description: UsageMeter } } } }
+  /sync/push: { post: { tags: [ops], summary: Idempotent offline operation; conflict codes become 409 CONFLICT, responses: { '201': { description: SYNCED }, '409': { description: CONFLICT }, '422': { description: FAILED } } } }
+  /sync/operations: { get: { tags: [ops], responses: { '200': { description: array } } } }
+  /sync/conflicts: { get: { tags: [ops], responses: { '200': { description: array } } } }
+  /sync/resolve/{id}: { post: { tags: [ops], summary: ACCEPT (repost) or REJECT with mandatory reason + audit, responses: { '200': { description: resolved } } } }
+  /backup: { get: { tags: [ops], responses: { '200': { description: backup_logs } } } }
+  /backup/run: { post: { tags: [ops], summary: NDJSON -> gzip -> AES-GCM -> R2 backups/, responses: { '201': { description: id, key, staging_restore_result=NOT_TESTED } } } }
+  /backup/download: { get: { tags: [ops], responses: { '200': { description: application/octet-stream }, '501': { $ref: '#/components/responses/Error' } } } }
+  /features: { get: { tags: [ops], security: [], summary: Honest COMPLETE/PARTIAL/INCOMPLETE feature checklist + integrity, responses: { '200': { description: features } } } }
+  /website/pages: { get: { tags: [ops], responses: { '200': { description: pages } } } }
+  /website/pages/{slug}: { put: { tags: [ops], summary: Sanitised CMS upsert, responses: { '200': { description: slug + status } } } }
+  /website/publish: { post: { tags: [ops], summary: Purge public cache + audit, responses: { '200': { description: published } } } }
+  /enquiries: { get: { tags: [ops], responses: { '200': { description: enquiries + items } } } }
+  /enquiries/{id}/status: { post: { tags: [ops], responses: { '200': { description: status } } } }
+  /enquiries/{id}/quotation: { post: { tags: [ops], responses: { '201': { description: quotation number } } } }
+  /health: { get: { tags: [ops], security: [], responses: { '200': { description: ok, runtime } } } }
+  /auth/passkeys/*:
+    post:
+      tags: [auth]
+      deprecated: true
+      summary: WebAuthn passkey endpoints — INCOMPLETE, return 501 INCOMPLETE_PASSKEYS
+      responses: { '501': { $ref: '#/components/responses/Error' } }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: zt_session }
+    csrfHeader: { type: apiKey, in: header, name: x-csrf-token }
+  responses:
+    Error:
+      description: Business/validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+  requestBodies:
+    Document:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/DocumentInput' }
+  schemas:
+    ApiError:
+      type: object
+      properties: { ok: { const: false }, error: { type: object, properties: { code: { type: string }, message_ur: { type: string }, message_en: { type: string }, field_errors: { type: object } } } }
+    Crop: { type: string, enum: [WHEAT, RICE, SESAME, MILLET, MAIZE, MOONG, MUSTARD] }
+    Book: { type: string, enum: [FERT, PEST, CHOK, WAND, CEM, SEED, OTHR, WHEAT, RICE, SESAME, MILLET, MAIZE, MOONG, MUSTARD] }
+    DocumentLine:
+      type: object
+      required: [product_id, qty_milli, rate_paisa]
+      properties:
+        product_id: { type: string }
+        qty_milli: { type: integer, minimum: 1, description: milli-units of base unit; grams when base=kg }
+        rate_paisa: { type: integer, minimum: 0 }
+        discount_paisa: { type: integer, minimum: 0, default: 0 }
+        batch_id: { type: string, nullable: true }
+        batch_no: { type: string }
+        mfg_date: { type: string, format: date }
+        expiry_date: { type: string, format: date }
+        bags: { type: integer }
+        weight_per_bag_grams: { type: integer }
+        manufacturer: { type: string }
+    DocumentInput:
+      type: object
+      required: [date, book_code, lines]
+      properties:
+        date: { type: string, format: date }
+        book_code: { $ref: '#/components/schemas/Book' }
+        party_id: { type: string, nullable: true }
+        party_name: { type: string, description: inline create when no party_id }
+        party_phone: { type: string }
+        party_address: { type: string }
+        cnic: { type: string, description: optional, AES-GCM encrypted at rest, settings-gated }
+        season: { type: string, enum: [KHARIF, RABI, NONE], default: NONE }
+        lines: { type: array, minItems: 1, maxItems: 60, items: { $ref: '#/components/schemas/DocumentLine' } }
+        discount_paisa: { type: integer, minimum: 0, default: 0 }
+        freight_paisa: { type: integer, minimum: 0, default: 0 }
+        loading_paisa: { type: integer, minimum: 0, default: 0 }
+        other_paisa: { type: integer, minimum: 0, default: 0 }
+        payments: { type: array, maxItems: 4, items: { type: object, required: [account_id, amount_paisa], properties: { account_id: { type: string, example: acct-cash }, amount_paisa: { type: integer, minimum: 0 } } } }
+        note: { type: string, maxLength: 1000 }
+        supplier_invoice_no: { type: string }
+        idempotency_key: { type: string }
+        offline: { type: boolean, default: false }
+        quick: { type: boolean, default: false }
+        status: { type: string, enum: [POSTED, DRAFT], default: POSTED }
+    ProductInput:
+      type: object
+      required: [name_ur, category_id, base_unit, purchase_unit, sale_unit, conversion_ratio_milli]
+      properties:
+        name_ur: { type: string }
+        name_en: { type: string }
+        category_id: { type: string }
+        brand_id: { type: string, nullable: true }
+        sku: { type: string }
+        slug: { type: string }
+        base_unit: { type: string }
+        purchase_unit: { type: string }
+        sale_unit: { type: string }
+        conversion_ratio_milli: { type: integer, minimum: 1 }
+        track_batch: { type: boolean }
+        track_expiry: { type: boolean }
+        is_pesticide: { type: boolean }
+        purchase_rate_paisa: { type: integer, minimum: 0 }
+        sale_rate_paisa: { type: integer, minimum: 0 }
+        show_public_price: { type: boolean }
+        public_price_paisa: { type: integer, minimum: 0 }
+        availability_mode: { type: string, enum: [AUTO, ALWAYS, CALL] }
+        is_published: { type: boolean }
+        is_featured: { type: boolean }

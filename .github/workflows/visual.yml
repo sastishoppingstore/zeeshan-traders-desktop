@@ -1,0 +1,21 @@
+name: Visual regression (INCOMPLETE gate)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['apps/web/**', 'packages/shared/**']
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    # This job is intentionally NOT enabled automatically: no baseline snapshots have been
+    # approved by the owner and browser binaries are not part of this repository.
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.ZT_VISUAL_BASELINES_APPROVED == '1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm install --no-audit --no-fund
+      - run: npm i -D @playwright/test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:web
+      - run: npm run server &
+      - run: npx playwright test

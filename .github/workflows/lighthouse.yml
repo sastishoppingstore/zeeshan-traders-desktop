@@ -1,0 +1,16 @@
+name: Lighthouse (INCOMPLETE gate)
+on:
+  workflow_dispatch:
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    # Not enabled automatically: Lighthouse CI was not run in this build.
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.ZT_LIGHTHOUSE_ENABLED == '1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:web
+      - run: npm run server &
+      - run: npx --yes @lhci/cli autorun --config=lighthouserc.json

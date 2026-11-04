@@ -1,0 +1,79 @@
+{
+  // ============================================================================
+  // NEW PROJECT — Zeeshan Traders v2. Nothing here touches the old Worker/D1/R2.
+  // All resource names are NEW: zt-v2-*; no database_id is reused or guessed.
+  // Status: config VALIDATED with `wrangler deploy --dry-run`; NOT DEPLOYED.
+  // Reason: this sandbox can only reach github.com/npm/pypi — Cloudflare API and
+  // the R2 S3 endpoint return SSL_ERROR_SYSCALL. Domain intentionally deferred.
+  // ============================================================================
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "zt-v2",
+  "main": "apps/worker/src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  // account_id is intentionally NOT stored here: wrangler reads CLOUDFLARE_ACCOUNT_ID
+  // from the deploy machine environment. Keep account identifiers out of Git.
+  "assets": {
+    "directory": "apps/web/dist",
+    "binding": "ASSETS",
+    // /erp and every other client-side route must serve index.html, matching the
+    // SPA fallback the local node-server implements.
+    "not_found_handling": "single-page-application",
+    // /api/v1/* is Worker-owned; without this, unmatched API paths would hit assets first.
+    "run_worker_first": true
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    "DEFAULT_LANG": "ur",
+    "TIMEZONE": "Asia/Karachi",
+    "CURRENCY": "PKR"
+    // RP_ID / RP_ORIGIN MUST be set to the final domain BEFORE the owner enrols
+    // passkeys (WebAuthn credentials are domain-bound). Deferred with the domain.
+  },
+  "triggers": {
+    // 00:00 Asia/Karachi = 19:00 UTC previous day (nightly backup + integrity).
+    "crons": ["0 19 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zt-v2-staging",
+      "database_id": "769a4c89-4748-420a-b1cc-02ae6f791f6e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // R2 is not yet enabled on this Cloudflare account (API error 10042), so the FILES
+  // binding is omitted until the buckets exist. The Worker guards every FILES access
+  // with `if (c.env.FILES)`, so product images and R2 backup writes are unavailable
+  // but nothing else breaks. Re-add the bindings after `wrangler r2 bucket create`.
+  "env": {
+    "staging": {
+      "name": "zt-v2-staging",
+      // Owner wants the FREE *.workers.dev domain first; custom domain links later.
+      "workers_dev": true,
+      "vars": { "ENVIRONMENT": "staging", "DEFAULT_LANG": "ur", "TIMEZONE": "Asia/Karachi", "CURRENCY": "PKR" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "zt-v2-staging", "database_id": "769a4c89-4748-420a-b1cc-02ae6f791f6e", "migrations_dir": "migrations" }
+      ],
+      // "r2_buckets": [ { "binding": "FILES", "bucket_name": "zt-v2-files-staging" } ],
+      "assets": { "directory": "apps/web/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+      "triggers": { "crons": ["0 19 * * *"] }
+    },
+    "production": {
+      "name": "zt-v2",
+      "workers_dev": true,
+      "vars": { "ENVIRONMENT": "production", "DEFAULT_LANG": "ur", "TIMEZONE": "Asia/Karachi", "CURRENCY": "PKR" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "zt-v2-production", "database_id": "cc5e1948-6e54-496e-9e56-b9fc01f86a21", "migrations_dir": "migrations" }
+      ],
+      // "r2_buckets": [ { "binding": "FILES", "bucket_name": "zt-v2-files-production" } ],
+      "assets": { "directory": "apps/web/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+      "triggers": { "crons": ["0 19 * * *"] }
+    }
+  }
+  // Secrets (names only — set with `wrangler secret put ... -c wrangler.v2.jsonc --env staging|production`):
+  //   SETUP_TOKEN, SESSION_SECRET, DATA_ENCRYPTION_KEY, BACKUP_ENCRYPTION_KEY,
+  //   TURNSTILE_SECRET (optional), TURNSTILE_SITEKEY (optional)
+  // Backups bucket: zt-v2-backups-staging / zt-v2-backups-production (create separately,
+  // see docs/NEW_PROJECT_DEPLOY.md). NEVER enable EXPOSE_SETUP_TOKEN in production.
+}

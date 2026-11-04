@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.dev/
+*.local
+.env
+.dev.vars
+.DS_Store
+.wrangler/
+coverage/
+playwright-report/
+test-results/
+*.log
+!.gitkeep
+.test-backups/
+# Owner-supplied photo originals (43 MB). The build reads them and commits only the
+# optimized WebP variants under apps/web/public/images/.
+images/
+.zt_snapshots/
+# Local IDE / tool settings and TS build cache
+.qoder/
+*.tsbuildinfo

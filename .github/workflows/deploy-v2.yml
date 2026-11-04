@@ -1,0 +1,145 @@
+# Deploy the COMPLETELY NEW zt-v2 project. Never touches the old wrangler.jsonc
+# resources. Runs ONLY on an explicit manual dispatch with a confirmation phrase.
+#
+# ONE-TIME SETUP by the owner, in GitHub → Settings → Secrets and variables → Actions:
+#   Secrets: CLOUDFLARE_API_TOKEN      (fresh/rotated token, NOT the one pasted in chat)
+#            CLOUDFLARE_ACCOUNT_ID     (account identifier, kept out of Git)
+#            V2_SETUP_TOKEN            (one-time owner setup token, shown once to the operator)
+#            V2_SESSION_SECRET         (random 32+ bytes, base64)
+#            V2_DATA_ENCRYPTION_KEY    (random 32 bytes, base64)
+#            V2_BACKUP_ENCRYPTION_KEY  (random 32 bytes, base64)
+#   Optional secrets: TURNSTILE_SECRET, TURNSTILE_SITEKEY
+# Then: Actions → "Deploy zt-v2 (NEW project only)" → Run workflow → type CREATE-NEW.
+#
+# The old project is never referenced: all names below start with zt-v2-.
+
+name: Deploy zt-v2 (NEW project only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      rp_id:
+        description: Final domain for WebAuthn RP ID (leave blank until the domain is chosen)
+        required: false
+        default: ''
+      rp_origin:
+        description: 'Origin, e.g. https://shop.example.com (leave blank until the domain is chosen)'
+        required: false
+        default: ''
+      confirm:
+        description: 'Type CREATE-NEW to confirm: NEW D1/R2 only, old project untouched'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.inputs.confirm == 'CREATE-NEW' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TARGET: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+
+      - name: Guard — required secrets must exist (values are never printed)
+        run: |
+          missing=0
+          for k in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID V2_SETUP_TOKEN \
+                   V2_SESSION_SECRET V2_DATA_ENCRYPTION_KEY V2_BACKUP_ENCRYPTION_KEY; do
+            if [ -z "$(printenv "$k")" ]; then echo "::error::Missing repository secret: $k"; missing=1; fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "All required secrets present."
+
+      - name: Verify Cloudflare token before creating anything
+        run: |
+          code=$(curl -sS -o /tmp/cf-verify.json -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify)
+          echo "tokens/verify http=$code"
+          [ "$code" = "200" ] || { echo "::error::Cloudflare token invalid"; exit 1; }
+
+      - run: npm install --no-audit --no-fund
+      - name: Full local gate (54 tests, typecheck, query plans, build)
+        run: npm run check:all
+      - name: New-project config dry-run (no network needed)
+        run: npm run deploy:dryrun
+
+      - name: Resolve NEW resource names
+        id: names
+        run: |
+          if [ "$TARGET" = "production" ]; then
+            echo "db=zt-v2-production"            >> "$GITHUB_OUTPUT"
+            echo "files=zt-v2-files-production"   >> "$GITHUB_OUTPUT"
+            echo "backups=zt-v2-backups-production" >> "$GITHUB_OUTPUT"
+            echo "placeholder=REPLACE_WITH_NEW_PRODUCTION_D1_UUID" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=zt-v2-staging"              >> "$GITHUB_OUTPUT"
+            echo "files=zt-v2-files-staging"     >> "$GITHUB_OUTPUT"
+            echo "backups=zt-v2-backups-staging" >> "$GITHUB_OUTPUT"
+            echo "placeholder=REPLACE_WITH_NEW_STAGING_D1_UUID" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create ALL-NEW D1 + R2 resources (idempotent; no old IDs)
+        run: |
+          npx wrangler d1 create "${{ steps.names.outputs.db }}" -c wrangler.v2.jsonc || true
+          npx wrangler r2 bucket create "${{ steps.names.outputs.files }}"   || true
+          npx wrangler r2 bucket create "${{ steps.names.outputs.backups }}" || true
+
+      - name: Resolve the real D1 UUID into a CI-only config copy
+        run: |
+          ID=$(npx wrangler d1 list --json | jq -r \
+            --arg n "${{ steps.names.outputs.db }}" \
+            '.. | objects | select(.name? == $n) | (.uuid // .id // empty)' | head -1)
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::Could not resolve D1 UUID for ${{ steps.names.outputs.db }}"; exit 1
+          fi
+          sed -i "s/${{ steps.names.outputs.placeholder }}/$ID/g" wrangler.v2.jsonc
+          echo "D1 UUID resolved for ${{ steps.names.outputs.db }} (value not logged)."
+
+      - name: Apply migrations to the NEW remote D1
+        run: |
+          npx wrangler d1 migrations apply "${{ steps.names.outputs.db }}" \
+            --remote -c wrangler.v2.jsonc --env "$TARGET"
+
+      - name: Set Worker secrets (never written to Git or logs)
+        run: |
+          printf '%s' "$V2_SETUP_TOKEN"           | npx wrangler secret put SETUP_TOKEN           -c wrangler.v2.jsonc --env "$TARGET"
+          printf '%s' "$V2_SESSION_SECRET"        | npx wrangler secret put SESSION_SECRET        -c wrangler.v2.jsonc --env "$TARGET"
+          printf '%s' "$V2_DATA_ENCRYPTION_KEY"   | npx wrangler secret put DATA_ENCRYPTION_KEY   -c wrangler.v2.jsonc --env "$TARGET"
+          printf '%s' "$V2_BACKUP_ENCRYPTION_KEY" | npx wrangler secret put BACKUP_ENCRYPTION_KEY -c wrangler.v2.jsonc --env "$TARGET"
+          # EXPOSE_SETUP_TOKEN is deliberately NEVER set in production.
+        env:
+          V2_SETUP_TOKEN: ${{ secrets.V2_SETUP_TOKEN }}
+          V2_SESSION_SECRET: ${{ secrets.V2_SESSION_SECRET }}
+          V2_DATA_ENCRYPTION_KEY: ${{ secrets.V2_DATA_ENCRYPTION_KEY }}
+          V2_BACKUP_ENCRYPTION_KEY: ${{ secrets.V2_BACKUP_ENCRYPTION_KEY }}
+
+      - name: Deploy the NEW Worker
+        run: |
+          VARS=()
+          if [ -n "${{ github.event.inputs.rp_id }}" ]; then
+            VARS+=(--var "RP_ID:${{ github.event.inputs.rp_id }}")
+          fi
+          if [ -n "${{ github.event.inputs.rp_origin }}" ]; then
+            VARS+=(--var "RP_ORIGIN:${{ github.event.inputs.rp_origin }}")
+          fi
+          npx wrangler deploy -c wrangler.v2.jsonc --env "$TARGET" "${VARS[@]}" 2>&1 | tee /tmp/deploy.log
+          test "${PIPESTATUS[0]}" -eq 0
+
+      - name: Print the REAL deployment URL (only if Wrangler produced one)
+        run: |
+          grep -Eo 'https://[A-Za-z0-9._/-]*workers\.dev[^ ]*|https://[A-Za-z0-9._-]+' /tmp/deploy.log | head -5 || true
+          echo "Verify with a real HTTP request before reporting any URL as live."

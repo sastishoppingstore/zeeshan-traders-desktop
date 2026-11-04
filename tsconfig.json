@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable",
+      "WebWorker"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@zt/shared": [
+        "packages/shared/src/index.ts"
+      ],
+      "@zt/shared/*": [
+        "packages/shared/src/*"
+      ]
+    }
+  },
+  "include": [
+    "packages/**/*",
+    "apps/**/*",
+    "tests/**/*",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "tests/visual/**",
+    "playwright.config.ts",
+    "apps/web/dist",
+    "node_modules",
+    "dist"
+  ]
+}
