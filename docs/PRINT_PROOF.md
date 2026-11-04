@@ -1,6 +1,6 @@
 # URDU PRINT / PDF PROOF — real browser rendering of the shipped components
 
-Date: 2026-11-04T16:06:12.096Z · Chromium headless · built CSS `index-D-Pi6ePr.css` · self-hosted WOFF2 fonts.
+Date: 2026-11-04T16:53:46.328Z · Chromium headless · built CSS `index-C3u04Sby.css` · self-hosted WOFF2 fonts.
 The markup is produced by **renderToStaticMarkup(PrintDocument)** — the same component the ERP preview and
 `window.print()` use — so every format below is the real template, not a hand-written copy.
 Content is a **rendering fixture** (title and note say so): no real customer, price, ledger or transaction.

@@ -181,14 +181,20 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
         {kind === 'sale' && book === 'FERT' && <TextField label={lang === 'ur' ? 'CNIC (اختیاری، انکرپٹڈ)' : 'CNIC (Optional, Encrypted)'} value={cnic} onChange={setCnic} />}
       </div>
 
-      <div className="card"><h2>{lang === 'ur' ? 'آئٹم لائنیں' : 'Item Lines'}</h2>
+      <div className="card">
+        <div className="between" style={{ marginBlockEnd: 12 }}>
+          <h2>{lang === 'ur' ? 'آئٹم لائنیں (ایک انوائس میں کئی اشیاء)' : 'Invoice Items (Multiple Items)'}</h2>
+          <Button variant="secondary" size="sm" onClick={addLine}>
+            <Mark kind="plus" /> {lang === 'ur' ? '+ اگلا آئٹم شامل کریں' : '+ Add Item'}
+          </Button>
+        </div>
         {lines.map((l, i) => <div key={i} className="card" style={{ marginBlockEnd: 12, background: 'var(--bg)' }}>
-          <div className="between"><strong>{lang === 'ur' ? `لائن ${i + 1}` : `Line ${i + 1}`}</strong>
+          <div className="between"><strong>{lang === 'ur' ? `آئٹم #${i + 1}` : `Item #${i + 1}`}</strong>
             {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))} aria-label={lang === 'ur' ? 'لائن ہٹائیں' : 'Remove line'}><Mark kind="x" /></Button>}</div>
-          <Combobox label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={l.product_id} onChange={(v) => {
+          <Combobox label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={l.product_id} minChars={2} onChange={(v) => {
             const p = productRows.find((x: any) => x.id === v);
             setLine(i, { product_id: v, rate_paisa: p ? (kind === 'sale' ? p.sale_rate_paisa : p.purchase_rate_paisa) : 0 });
-          }} options={productOptions} placeholder={lang === 'ur' ? 'اردو یا انگریزی نام / SKU' : 'Product name or SKU'} required />
+          }} options={productOptions} placeholder={lang === 'ur' ? 'پروڈکٹ نام کے کم از کم 2 حروف لکھیں (مثلاً یوریا، ڈی اے پی)…' : 'Type at least 2 letters of product name…'} required />
           <div className="grid g2">
             <QtyField label={lang === 'ur' ? 'تعداد' : 'Quantity'} milli={l.qty_milli} onChange={(v) => setLine(i, { qty_milli: v })}
               unit={productRows.find((p: any) => p.id === l.product_id)?.base_unit} required />
@@ -215,7 +221,11 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
               onChange={(v) => setLine(i, { weight_per_bag_grams: Number(v) || 0 })} inputMode="numeric" />
           </div>}
         </div>)}
-        <Button variant="secondary" size="sm" onClick={addLine}>{lang === 'ur' ? '+ لائن شامل کریں' : '+ Add Line'}</Button>
+        <div style={{ display: 'flex', gap: 10, marginBlockStart: 12 }}>
+          <Button variant="primary" size="sm" onClick={addLine}>
+            <Mark kind="plus" /> {lang === 'ur' ? '+ اگلا آئٹم شامل کریں (Plus Button)' : '+ Add Another Item'}
+          </Button>
+        </div>
       </div>
 
       {!quick && <div className="card"><h2>{lang === 'ur' ? 'اضافی اخراجات' : 'Extra Expenses'}</h2><div className="grid g2">

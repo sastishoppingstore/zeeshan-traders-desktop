@@ -109,14 +109,14 @@ export function GenericList({ config }: { config: any }) {
   </div>;
 }
 
-/** ERP-02 quick actions — the only place the dashboard gets 3D depth (forms stay flat). */
-const DASH_QUICK: { to: string; ur: string; en: string; icon: string }[] = [
-  { to: '/erp/fertilizer/sale/new?quick=1', ur: 'کھاد فروخت', en: 'Fertilizer Sale', icon: 'sales' },
-  { to: '/erp/fertilizer/purchase/new?quick=1', ur: 'کھاد خرید', en: 'Fertilizer Purchase', icon: 'purchases' },
-  { to: '/erp/grains', ur: 'اجناس', en: 'Grains', icon: 'grains' },
-  { to: '/erp/receipts/new', ur: 'رقم وصول', en: 'Receive Money', icon: 'khata' },
-  { to: '/erp/payments/new', ur: 'رقم ادا', en: 'Pay Money', icon: 'accounts' },
-  { to: '/erp/expenses/new', ur: 'خرچہ', en: 'Expense', icon: 'expenses' },
+/** ERP-02 quick actions — 3D boxes for Fertilizer Sale, Purchase, Grains, Receive/Pay Money, Expense (no photos). */
+const DASH_QUICK: { to: string; ur: string; en: string; badge: string }[] = [
+  { to: '/erp/fertilizer/sale/new?quick=1', ur: 'کھاد فروخت', en: 'Fertilizer Sale', badge: 'FERT SALE' },
+  { to: '/erp/fertilizer/purchase/new?quick=1', ur: 'کھاد خرید', en: 'Fertilizer Purchase', badge: 'FERT PURCH' },
+  { to: '/erp/grains', ur: 'اجناس', en: 'Grains', badge: 'MANDI GRAIN' },
+  { to: '/erp/receipts/new', ur: 'رقم وصول', en: 'Receive Money', badge: 'CASH IN' },
+  { to: '/erp/payments/new', ur: 'رقم ادا', en: 'Pay Money', badge: 'PAYMENT' },
+  { to: '/erp/expenses/new', ur: 'خرچہ', en: 'Expense', badge: 'EXPENSE' },
 ];
 
 // ---------------------------------- Dashboard --------------------------------
@@ -146,8 +146,20 @@ export function Dashboard() {
       <StatCard label={lang === 'ur' ? 'قابلِ ادا' : 'Payables'} value={formatPKR(d?.credit?.payable_paisa ?? 0)} />
       <StatCard label={lang === 'ur' ? 'نقد + بینک' : 'Cash + Bank'} value={formatPKR(cash)} />
     </div>
-    <Reveal className="quick-grid" as="div">{DASH_QUICK.map((q) =>
-      <TiltCard key={q.to} href={q.to} tone="emerald"><NavIcon icon={q.icon} label={lang === 'ur' ? q.ur : q.en} size={40} /><strong>{lang === 'ur' ? q.ur : q.en}</strong></TiltCard>)}</Reveal>
+    <Reveal className="quick-grid" as="div">
+      {DASH_QUICK.map((q) => (
+        <Link key={q.to} to={q.to} className="dash-3d-box">
+          <div className="dash-3d-box-top">
+            <span className="dash-3d-box-badge">{q.badge}</span>
+            <span style={{ fontSize: 13, color: '#E7C173' }}>{lang === 'ur' ? 'اندراج ←' : '→'}</span>
+          </div>
+          <div>
+            <div className="dash-3d-box-title">{lang === 'ur' ? q.ur : q.en}</div>
+            <div className="dash-3d-box-sub">{lang === 'ur' ? q.en : q.ur}</div>
+          </div>
+        </Link>
+      ))}
+    </Reveal>
     <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(290px,1fr))', marginBlock: 16 }}>
       <div className="card glass"><h2>{lang === 'ur' ? 'کھاتہ جات (17)' : 'Business Ledgers (17)'}</h2>
         <div className="row" style={{ flexWrap: 'wrap' }}>
@@ -688,8 +700,19 @@ export function ReportsGallery() {
         <h1 className="head-icon"><NavIcon icon="reports" label={lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'} size={34} />{lang === 'ur' ? 'رپورٹس گیلری' : 'Reports Gallery'}</h1>
       </div>
     </div>
-    <div className="tile-grid">{REPORTS.map((r) => <button key={r.id} className={`tile ${active === r.id ? 'active' : ''}`}
-      onClick={() => setParams({ report: r.id })}><NavIcon icon="reports" label={lang === 'ur' ? r.ur : r.en} size={44} /><strong>{lang === 'ur' ? r.ur : r.en}</strong><span className="small">{lang === 'ur' ? r.en : r.ur}</span></button>)}</div>
+    <div className="report-3d-grid">{REPORTS.map((r) => (
+      <button key={r.id} type="button" className={`report-3d-btn ${active === r.id ? 'active' : ''}`}
+        onClick={() => setParams({ report: r.id })}>
+        <div className="report-3d-head">
+          <span className="report-3d-badge">{r.id.toUpperCase().replace('-', ' ')}</span>
+          {active === r.id && <span style={{ color: '#E7C173', fontSize: 13, fontWeight: 800 }}>✓ {lang === 'ur' ? 'فعال' : 'Active'}</span>}
+        </div>
+        <div>
+          <div className="report-3d-title">{lang === 'ur' ? r.ur : r.en}</div>
+          <div className="report-3d-sub">{lang === 'ur' ? r.en : r.ur}</div>
+        </div>
+      </button>
+    ))}</div>
     <div className="card" style={{ marginBlockStart: 16 }}>
       <div className="between"><h2>{lang === 'ur' ? (REPORTS.find((r) => r.id === active)?.ur) : (REPORTS.find((r) => r.id === active)?.en || REPORTS.find((r) => r.id === active)?.ur)}</h2>
         <div className="btn-row"><SelectField label="" value={book} onChange={setBook} placeholder={lang === 'ur' ? 'تمام کھاتہ جات' : 'All Ledgers'}
@@ -1319,11 +1342,9 @@ export function InventoryScreen() {
         <h1 className="head-icon"><NavIcon icon="inventory" label={lang === 'ur' ? 'انوینٹری / اسٹاک' : 'Inventory & Stock'} size={34} />{lang === 'ur' ? 'انوینٹری / اسٹاک' : 'Inventory & Stock'}</h1>
       </div>
       <div className="btn-row no-print">
-        <Link className="btn btn-secondary btn-sm" to="/erp/products/new">{lang === 'ur' ? '+ نئی پروڈکٹ' : '+ New Product'}</Link>
-        <Link className="btn btn-primary btn-sm" to="/erp/purchases/new">{lang === 'ur' ? '+ نئی خریداری (مال اندر)' : '+ Purchase / Stock In'}</Link>
-        <Button variant="ghost" size="sm" onClick={() => setTab('opening')}>{lang === 'ur' ? '+ اوپننگ اسٹاک' : '+ Opening Stock'}</Button>
-        <Button variant="ghost" size="sm" onClick={() => setTab('adjust')}>{lang === 'ur' ? '+ ایڈجسٹمنٹ' : '+ Adjustment'}</Button>
-        <Button variant="ghost" size="sm" onClick={() => downloadCsv('/api/v1/stock/export', 'zt-stock.csv')}>{lang === 'ur' ? 'CSV برآمد' : 'Export CSV'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => downloadCsv('/api/v1/stock/export', 'zt-stock.csv')}>
+          <Mark kind="download" /> {lang === 'ur' ? 'CSV برآمد' : 'Export CSV'}
+        </Button>
       </div>
     </div>
     <Tabs tabs={[
@@ -1691,7 +1712,8 @@ export function PaymentMethodsScreen() {
   };
   const [form, setForm] = useState<any>(BLANK_METHOD);
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [qrPreview, setQrPreview] = useState<string>('');
+  const [qrFile, setQrFile] = useState<File | null>(null);
 
   const METHOD_KINDS = [
     { value: 'BANK', label: lang === 'ur' ? 'بینک اکاؤنٹ' : 'Bank Account' },
@@ -1705,15 +1727,36 @@ export function PaymentMethodsScreen() {
     setErr('');
     setIsNew(!m);
     setForm(m ? { ...BLANK_METHOD, ...m, account_id: m.account_id ?? '' } : { ...BLANK_METHOD, sort: (data ?? []).length * 10 });
+    setQrPreview(m?.qr_url ?? '');
+    setQrFile(null);
     setSel(m ?? { id: '' });
   };
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const handleQrPick = (file: File) => {
+    setQrFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setQrPreview(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const save = async () => {
     setBusy(true); setErr('');
     try {
       const body = { ...form, account_id: form.account_id || null, is_active: !!form.is_active, sort: Number(form.sort) || 0 };
-      await api(isNew ? '/api/v1/payment-methods' : `/api/v1/payment-methods/${body.id}`, { method: isNew ? 'POST' : 'PUT', body });
+      const res = await api<any>(isNew ? '/api/v1/payment-methods' : `/api/v1/payment-methods/${body.id}`, { method: isNew ? 'POST' : 'PUT', body });
+      const methodId = isNew ? res.id : body.id;
+      if (qrFile && methodId) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result));
+          r.onerror = reject;
+          r.readAsDataURL(qrFile);
+        });
+        await api(`/api/v1/payment-methods/${methodId}/qr`, { method: 'POST', body: { data_url: dataUrl } });
+      }
       toast(t('saved')); refetch(); setSel(null);
     } catch (e: any) { setErr(e.message_ur ?? String(e)); }
     finally { setBusy(false); }
@@ -1770,6 +1813,31 @@ export function PaymentMethodsScreen() {
         <TextField label={t('mobile')} value={form.mobile_number} onChange={(v) => set('mobile_number', v)} dir="ltr" inputMode="tel" />}
       <SelectField label={t('linkedAccount')} value={form.account_id} onChange={(v) => set('account_id', v)} placeholder={lang === 'ur' ? 'نجی' : 'Private'}
         options={(accounts.data ?? []).map((a: any) => ({ value: a.id, label: `${lang === 'ur' ? a.name_ur : (a.name_en || a.name_ur)} (${a.code ?? ''})` }))} />
+      <div className="field">
+        <label>{lang === 'ur' ? 'QR کوڈ تصویر (جاز کیش / ایزی پیسہ / بینک)' : 'QR Code Image (JazzCash / Easypaisa / Bank)'}</label>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="input"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleQrPick(f);
+          }}
+          aria-label={lang === 'ur' ? 'QR تصویر منتخب کریں' : 'Choose QR image'}
+        />
+        {qrPreview && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src={qrPreview} alt="QR Preview" width={110} height={110} style={{ borderRadius: 8, border: '1px solid var(--line)', background: '#fff', padding: 4 }} />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => { setQrPreview(''); setQrFile(null); }}
+            >
+              {lang === 'ur' ? 'تصویر ہٹائیں' : 'Remove QR'}
+            </button>
+          </div>
+        )}
+      </div>
       <div className="field"><label htmlFor="pm-inst">{t('note')}</label>
         <textarea id="pm-inst" className="input" rows={3} value={form.instructions_ur} onChange={(e) => set('instructions_ur', e.target.value)} /></div>
       <CheckField label={lang === 'ur' ? 'فعال' : 'Active'} checked={!!form.is_active} onChange={(v) => set('is_active', v)} />
@@ -1781,42 +1849,8 @@ export function PaymentMethodsScreen() {
 
 // ------------------------- Universal Create / Invoice Creator ----------------
 export function UniversalCreateScreen() {
-  const { lang, can } = useApp();
+  const { lang } = useApp();
   const nav = useNavigate();
-  const [filter, setFilter] = useState('ALL');
-  const [search, setSearch] = useState('');
-
-  const entries = [
-    { id: 'fert_sale', cat: 'sales', perm: 'sales.post', ur: 'کھاد فروخت انوائس', en: 'Fertilizer Sale Invoice', desc_ur: 'یوریا، ڈی اے پی، این پی و دیگر کھاد کی فروخت', desc_en: 'Sell Urea, DAP, NP and all fertilizers', to: '/erp/fertilizer/sale/new', icon: 'FERT', badge: 'FERT' },
-    { id: 'pest_sale', cat: 'sales', perm: 'sales.post', ur: 'پیسٹی سائیڈ فروخت انوائس', en: 'Pesticide Sale Invoice', desc_ur: 'سپرے و ادویات برائے فصل (بیچ اور ایکسپائری لازمی)', desc_en: 'Sell pesticides with batch & expiry tracking', to: '/erp/pesticide/sale/new', icon: 'PEST', badge: 'PEST' },
-    { id: 'general_sale', cat: 'sales', perm: 'sales.post', ur: 'عام فروخت بل', en: 'General Sale Bill', desc_ur: 'چوکر، ونڈا، سیمنٹ، بیج و دیگر اشیاء کی فروخت', desc_en: 'Sale invoice for feed, seed, cement & goods', to: '/erp/sales/new', icon: 'sales', badge: 'SALE' },
-    { id: 'fert_purch', cat: 'purchases', perm: 'purchases.post', ur: 'کھاد خریداری بل', en: 'Fertilizer Purchase Bill', desc_ur: 'سپلائر سے کھاد کی خریداری اور گودام میں مال اندر', desc_en: 'Purchase fertilizers from suppliers into stock', to: '/erp/fertilizer/purchase/new', icon: 'FERT', badge: 'PURCHASE' },
-    { id: 'pest_purch', cat: 'purchases', perm: 'purchases.post', ur: 'پیسٹی سائیڈ خریداری بل', en: 'Pesticide Purchase Bill', desc_ur: 'پیسٹی سائیڈ مال اندر مع بیچ نمبر اور میعاد', desc_en: 'Purchase pesticides with batch & expiry tracking', to: '/erp/pesticide/purchase/new', icon: 'PEST', badge: 'PURCHASE' },
-    { id: 'general_purch', cat: 'purchases', perm: 'purchases.post', ur: 'عام خریداری بل (اسٹاک اندر)', en: 'General Purchase Bill', desc_ur: 'چوکر، ونڈا، بیج وغیرہ کی خریداری اور اسٹاک میں اضافہ', desc_en: 'Purchase general goods & feed into warehouse', to: '/erp/purchases/new', icon: 'purchases', badge: 'PURCHASE' },
-    { id: 'grain_purch', cat: 'purchases', perm: 'grains.post', ur: 'اجناس / غلہ خریداری واؤچر', en: 'Grain Lot Purchase (Weight)', desc_ur: 'گندم، دھان، مکئی خریداری (خام وزن، ٹیر، خالص وزن)', desc_en: 'Buy grain at mandi scale: gross, tare, net weight', to: '/erp/grains/WHEAT/purchase/new', icon: 'WHEAT', badge: 'GRAIN' },
-    { id: 'grain_sale', cat: 'sales', perm: 'grains.post', ur: 'اجناس / غلہ فروخت واؤچر', en: 'Grain Lot Sale', desc_ur: 'گندم، دھان، مکئی کی ملوں یا خریداروں کو فروخت', desc_en: 'Sell grain lots to mills or mandi merchants', to: '/erp/grains/WHEAT/sale/new', icon: 'WHEAT', badge: 'GRAIN' },
-    { id: 'payroll_run', cat: 'payroll', perm: 'employees.read', ur: 'ملازم تنخواہ واؤچر', en: 'Salary / Payroll Voucher', desc_ur: 'ماہانہ تنخواہ سلپ، ایڈوانس کٹوتی اور خالص تنخواہ ادائیگی', desc_en: 'Process monthly salaries, deductions & net payroll', to: '/erp/employees', icon: 'employees', badge: 'PAYROLL' },
-    { id: 'salary_adv', cat: 'payroll', perm: 'expenses.post', ur: 'تنخواہ ایڈوانس / ملازم ادھار', en: 'Salary Advance Voucher', desc_ur: 'ملازمین کو پیشگی تنخواہ یا ایڈوانس ادائیگی', desc_en: 'Advance payment to employees before month end', to: '/erp/expenses/new', icon: 'employees', badge: 'ADVANCE' },
-    { id: 'expense_v', cat: 'payroll', perm: 'expenses.post', ur: 'دکان خرچہ واؤچر', en: 'Shop Expense Voucher', desc_ur: 'بجلی بل، کرایہ، گاڑی کا کرایہ، چائے پانی، مرمت وغیرہ', desc_en: 'Shop rent, electricity, freight, refreshments, tea', to: '/erp/expenses/new', icon: 'expenses', badge: 'EXPENSE' },
-    { id: 'receipt_v', cat: 'money', perm: 'receipts.post', ur: 'رقم وصولی رسید (کیش / بینک)', en: 'Cash / Bank Receipt Voucher', desc_ur: 'گاہک یا کاشتکار سے رقم وصول کر کے کھاتے میں جمع', desc_en: 'Receive money into cash drawer or bank accounts', to: '/erp/receipts/new', icon: 'accounts', badge: 'RECEIPT' },
-    { id: 'payment_v', cat: 'money', perm: 'payments.post', ur: 'رقم ادائیگی واؤچر (سپلائر / کاشتکار)', en: 'Cash / Bank Payment Voucher', desc_ur: 'سپلائر یا کاشتکار کو نقد یا بینک کے ذریعے ادائیگی', desc_en: 'Pay suppliers, farmers, vendors from cash or bank', to: '/erp/payments/new', icon: 'accounts', badge: 'PAYMENT' },
-    { id: 'transfer_v', cat: 'money', perm: 'accounts.read', ur: 'کھاتہ فنڈ منتقلی (کیش ↔ بینک)', en: 'Bank / Cash Fund Transfer', desc_ur: 'کیش سے بینک میں جمع یا بینک سے کیش نکالنا', desc_en: 'Transfer funds between cash drawer and bank accounts', to: '/erp/accounts/transfer', icon: 'accounts', badge: 'TRANSFER' },
-    { id: 'party_new', cat: 'money', perm: 'parties.read', ur: 'نیا کھاتہ دار / فریق بنائیں', en: 'New Party / Customer / Vendor', desc_ur: 'نیا گاہک، سپلائر، کاشتکار یا ملازم کھاتہ درج کریں', desc_en: 'Register a new customer, supplier, farmer, or worker', to: '/erp/parties/new', icon: 'parties', badge: 'KHATA' },
-    { id: 'prod_new', cat: 'stock', perm: 'products.read', ur: 'نئی پروڈکٹ شامل کریں', en: 'New Product Entry', desc_ur: 'کیٹلاگ میں نیا سامان، کھاد، پیسٹی سائیڈ یا آئٹم بنائیں', desc_en: 'Add new goods, fertilizer or pesticide item', to: '/erp/products/new', icon: 'products', badge: 'PRODUCT' },
-    { id: 'opening_stk', cat: 'stock', perm: 'stock.read', ur: 'ابتدائی اسٹاک واؤچر', en: 'Opening Stock Entry', desc_ur: 'گودام میں موجود مال کا افتتاحی وزن اور لاگت درج کریں', desc_en: 'Record verified initial stock quantities and costs', to: '/erp/inventory', icon: 'inventory', badge: 'OPENING' },
-    { id: 'stock_adj', cat: 'stock', perm: 'stock.read', ur: 'اسٹاک ایڈجسٹمنٹ واؤچر', en: 'Stock Adjustment', desc_ur: 'کمی بیشی، نقصان یا فزیکل کاؤنٹ کے فرق کا اندراج', desc_en: 'Adjust inventory counts with audit trail & reasons', to: '/erp/inventory', icon: 'inventory', badge: 'ADJUST' },
-    { id: 'return_v', cat: 'sales', perm: 'returns.read', ur: 'واپسی واؤچر (سیل / پرچیز ریٹرن)', en: 'Sales / Purchase Return', desc_ur: 'گاہک کی مال واپسی یا سپلائر کو واپسی', desc_en: 'Customer sale returns or supplier purchase returns', to: '/erp/returns', icon: 'returns', badge: 'RETURN' },
-  ];
-
-  const filtered = entries.filter((e) => {
-    if (e.perm && !can(e.perm)) return false;
-    if (filter !== 'ALL' && e.cat !== filter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return e.ur.toLowerCase().includes(q) || e.en.toLowerCase().includes(q) || e.desc_ur.toLowerCase().includes(q) || e.desc_en.toLowerCase().includes(q);
-    }
-    return true;
-  });
 
   return <div>
     <div className="between">
@@ -1825,36 +1859,36 @@ export function UniversalCreateScreen() {
           aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
           <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
         </button>
-        <h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'نیا واؤچر / انوائس بنائیں' : 'Create Voucher / Invoice'} size={34} />{lang === 'ur' ? 'نیا واؤچر / انوائس بنائیں' : 'Create Voucher / Invoice'}</h1>
+        <h1 className="head-icon"><NavIcon icon="documents" label={lang === 'ur' ? 'انوائس بنائیں' : 'Create Invoice'} size={34} />{lang === 'ur' ? 'انوائس بنائیں' : 'Create Invoice'}</h1>
       </div>
     </div>
 
-    <div className="toolbar no-print" style={{ marginBlock: '12px 16px' }}>
-      <input className="input" value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder={lang === 'ur' ? 'واؤچر یا انوائس کی قسم تلاش کریں…' : 'Search voucher or invoice type…'}
-        aria-label={lang === 'ur' ? 'تلاش' : 'Search'} style={{ maxWidth: 360 }} />
-      <div className="btn-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-        <button type="button" className={`btn btn-sm ${filter === 'ALL' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('ALL')}>{lang === 'ur' ? 'تمام' : 'All'}</button>
-        <button type="button" className={`btn btn-sm ${filter === 'sales' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('sales')}>{lang === 'ur' ? 'فروخت و بل' : 'Sales'}</button>
-        <button type="button" className={`btn btn-sm ${filter === 'purchases' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('purchases')}>{lang === 'ur' ? 'خریداری' : 'Purchases'}</button>
-        <button type="button" className={`btn btn-sm ${filter === 'payroll' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('payroll')}>{lang === 'ur' ? 'تنخواہ و اخراجات' : 'Payroll & Expenses'}</button>
-        <button type="button" className={`btn btn-sm ${filter === 'money' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('money')}>{lang === 'ur' ? 'رقم و کھاتہ' : 'Money & Khata'}</button>
-        <button type="button" className={`btn btn-sm ${filter === 'stock' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setFilter('stock')}>{lang === 'ur' ? 'اسٹاک و پروڈکٹس' : 'Stock & Items'}</button>
-      </div>
-    </div>
+    <p style={{ color: 'var(--text-dim)', marginBlock: '8px 20px' }}>
+      {lang === 'ur' ? 'انوائس کی قسم منتخب کریں — آگے پروڈکٹ منتخب کریں اور تفصیلات درج کریں۔' : 'Select invoice type — choose product and enter details.'}
+    </p>
 
-    <div className="quick-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-      {filtered.map((item) => (
-        <TiltCard key={item.id} href={item.to} tone="default" className="create-voucher-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 8, textDecoration: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <NavIcon icon={item.icon} label={lang === 'ur' ? item.ur : item.en} size={36} />
-            <Chip tone="success">{item.badge}</Chip>
-          </div>
-          <strong style={{ fontSize: '1.05rem', color: 'var(--text-bright)' }}>{lang === 'ur' ? item.ur : item.en}</strong>
-          <p className="small" style={{ color: 'var(--text-dim)', margin: 0, lineHeight: 1.4 }}>{lang === 'ur' ? item.desc_ur : item.desc_en}</p>
-        </TiltCard>
-      ))}
+    <div className="grid g2" style={{ maxWidth: 700, marginBlockStart: 16 }}>
+      <Link to="/erp/sales/new" className="dash-3d-box" style={{ minHeight: 130, padding: 22, textDecoration: 'none' }}>
+        <div className="dash-3d-box-top">
+          <span className="dash-3d-box-badge">SALE</span>
+          <span style={{ fontSize: 16, color: '#E7C173' }}>{lang === 'ur' ? 'بنائیں ←' : '→'}</span>
+        </div>
+        <div>
+          <div className="dash-3d-box-title" style={{ fontSize: 20 }}>{lang === 'ur' ? 'فروخت انوائس (Sale Invoice)' : 'Sale Invoice'}</div>
+          <div className="dash-3d-box-sub" style={{ fontSize: 13, marginTop: 6 }}>{lang === 'ur' ? 'گاہک کو کھاد، ادویات یا دیگر اشیاء کی فروخت' : 'Sell fertilizers, seeds, pesticides & goods to customers'}</div>
+        </div>
+      </Link>
+
+      <Link to="/erp/purchases/new" className="dash-3d-box" style={{ minHeight: 130, padding: 22, textDecoration: 'none' }}>
+        <div className="dash-3d-box-top">
+          <span className="dash-3d-box-badge">PURCHASE</span>
+          <span style={{ fontSize: 16, color: '#E7C173' }}>{lang === 'ur' ? 'بنائیں ←' : '→'}</span>
+        </div>
+        <div>
+          <div className="dash-3d-box-title" style={{ fontSize: 20 }}>{lang === 'ur' ? 'خریداری انوائس (Purchase Invoice)' : 'Purchase Invoice'}</div>
+          <div className="dash-3d-box-sub" style={{ fontSize: 13, marginTop: 6 }}>{lang === 'ur' ? 'سپلائر سے مال خریداری اور گودام میں اسٹاک اندر' : 'Purchase stock from suppliers into warehouse'}</div>
+        </div>
+      </Link>
     </div>
-    {!filtered.length && <EmptyState title={lang === 'ur' ? 'کوئی اندراج نہیں ملا' : 'No matching voucher type found'} />}
   </div>;
 }

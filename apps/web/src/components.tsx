@@ -253,27 +253,131 @@ export function OfflineBanner() {
 }
 
 /** Type-ahead combobox with Urdu/English search and "+ نیا شامل کریں". */
-export function Combobox({ label, value, onChange, options, onCreate, placeholder, error, required }: {
+export function Combobox({ label, value, onChange, options, onCreate, placeholder, error, required, minChars = 0 }: {
   label: string; value: string; onChange: (v: string) => void;
   options: { value: string; label: string; sub?: string }[];
   onCreate?: (name: string) => void; placeholder?: string; error?: string; required?: boolean;
+  minChars?: number;
 }) {
-  const [q, setQ] = useState('');
-  const filtered = useMemo(() => options.filter((o) => (o.label + ' ' + (o.sub ?? '')).toLowerCase().includes(q.toLowerCase())).slice(0, 30), [options, q]);
+  const selected = options.find((o) => o.value === value);
+  const [q, setQ] = useState(selected?.label ?? '');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (selected && (!q || q !== selected.label)) {
+      setQ(selected.label);
+    } else if (!value && !selected) {
+      setQ('');
+    }
+  }, [value, selected?.label]);
+
+  const hasMinChars = !minChars || q.trim().length >= minChars;
+  const filtered = useMemo(() => {
+    if (!hasMinChars) return [];
+    const query = q.trim().toLowerCase();
+    return options.filter((o) => (o.label + ' ' + (o.sub ?? '')).toLowerCase().includes(query));
+  }, [options, q, hasMinChars]);
+
   const id = useId();
+
   return <Field label={label} error={error} required={required} htmlFor={id}>
-    <input id={id} className="input" value={q} placeholder={placeholder ?? 'تلاش کریں…'}
-      onChange={(e) => setQ(e.target.value)} aria-invalid={!!error} />
-    <div className="card pad0" style={{ marginBlockStart: 6, maxHeight: 190, overflowY: 'auto' }}>
-      {filtered.map((o) => <button type="button" key={o.value} className="btn btn-ghost btn-block"
-        style={{ justifyContent: 'space-between', borderRadius: 0 }}
-        onClick={() => { onChange(o.value); setQ(o.label); }}>
-        <span>{o.label}</span>{o.sub && <span className="small num">{o.sub}</span>}
-      </button>)}
-      {!filtered.length && <div className="small" style={{ padding: 12 }}>کوئی نتیجہ نہیں</div>}
-      {onCreate && q.trim().length > 1 && <button type="button" className="btn btn-secondary btn-block"
-        style={{ borderRadius: 0 }} onClick={() => { onCreate(q.trim()); setQ(''); }}>+ نیا شامل کریں: {q}</button>}
+    <div style={{ position: 'relative' }}>
+      <input
+        id={id}
+        className="input"
+        value={q}
+        placeholder={placeholder ?? 'تلاش کریں…'}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+          if (value && e.target.value !== selected?.label) {
+            onChange('');
+          }
+        }}
+        aria-invalid={!!error}
+      />
+      {q && (
+        <button
+          type="button"
+          onClick={() => { setQ(''); onChange(''); setOpen(true); }}
+          style={{
+            position: 'absolute',
+            insetInlineEnd: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-dim)',
+            cursor: 'pointer',
+            fontSize: 14,
+            padding: 4,
+          }}
+          aria-label="Clear"
+        >
+          ✕
+        </button>
+      )}
     </div>
+
+    {open && (
+      <div className="card pad0" style={{
+        marginBlockStart: 6,
+        maxHeight: 220,
+        overflowY: 'auto',
+        border: '1.5px solid rgba(231, 193, 115, 0.45)',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.4)',
+        zIndex: 20,
+      }}>
+        {!hasMinChars ? (
+          <div className="small" style={{ padding: '12px 14px', color: 'var(--text-dim)' }}>
+            کم از کم {minChars} حروف لکھیں (مثلاً پروڈکٹ نام کے 2 حروف)…
+          </div>
+        ) : filtered.length > 0 ? (
+          filtered.map((o) => (
+            <button
+              type="button"
+              key={o.value}
+              className="btn btn-ghost btn-block"
+              style={{
+                justifyContent: 'space-between',
+                borderRadius: 0,
+                padding: '10px 14px',
+                borderBottom: '1px solid var(--line, rgba(255,255,255,0.06))',
+                background: o.value === value ? 'rgba(34, 197, 94, 0.15)' : undefined,
+                textAlign: 'start',
+              }}
+              onClick={() => {
+                onChange(o.value);
+                setQ(o.label);
+                setOpen(false);
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>{o.label}</span>
+              {o.sub && <span className="small num" style={{ color: '#E7C173' }}>{o.sub}</span>}
+            </button>
+          ))
+        ) : (
+          <div className="small" style={{ padding: '12px 14px', color: 'var(--text-dim)' }}>
+            کوئی نتیجہ نہیں ملا
+          </div>
+        )}
+
+        {onCreate && q.trim().length > 1 && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-block"
+            style={{ borderRadius: 0, padding: 10 }}
+            onClick={() => {
+              onCreate(q.trim());
+              setOpen(false);
+            }}
+          >
+            + نیا شامل کریں: {q}
+          </button>
+        )}
+      </div>
+    )}
   </Field>;
 }
 

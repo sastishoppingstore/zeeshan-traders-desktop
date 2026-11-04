@@ -25,7 +25,6 @@ type NavItem = { to: string; ur: string; en: string; icon: string; perm?: string
 const NAV_GROUPS: { group: string; group_en: string; items: NavItem[] }[] = [
   { group: 'مرکزی', group_en: 'Main', items: [
     { to: '/erp', ur: 'ڈیش بورڈ', en: 'Dashboard', icon: 'dashboard', perm: 'dashboard.view' },
-    { to: '/erp/create', ur: 'نیا اندراج / واؤچر', en: 'New Voucher / Invoice', icon: 'documents', perm: 'sales.read' },
     { to: '/erp/sales', ur: 'فروخت', en: 'Sales', icon: 'sales', perm: 'sales.read' },
     { to: '/erp/purchases', ur: 'خرید', en: 'Purchases', icon: 'purchases', perm: 'purchases.read' },
     { to: '/erp/inventory', ur: 'اسٹاک', en: 'Inventory', icon: 'inventory', perm: 'stock.read' },
@@ -125,9 +124,6 @@ function TopBar({ title }: { title: string }) {
         <img src="/icons/icon-192.png" alt="" width={32} height={32} style={{ borderRadius: 6 }} />
       </Link>
       <div className="title">{title}</div>
-      <Link to="/erp/create" className="btn btn-primary btn-sm no-print" style={{ marginInline: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }} aria-label={lang === 'ur' ? 'نیا واؤچر / انوائس' : 'New Voucher / Invoice'} title={lang === 'ur' ? 'نیا واؤچر / انوائس' : 'New Voucher / Invoice'}>
-        <Mark kind="plus" /> <span className="topbar-btn-text">{lang === 'ur' ? 'نیا واؤچر' : '+ Create'}</span>
-      </Link>
       <button className="btn btn-ghost btn-sm no-print" onClick={() => setSearch(true)} aria-label={lang === 'ur' ? 'تلاش' : 'Search'}><Mark kind="search" /></button>
       <button className={`chip ${online ? (conflicts ? 'danger' : 'success') : 'warning'}`} onClick={() => nav('/erp/sync')}
         title="Sync Centre" style={{ cursor: 'pointer', border: 'none' }}>{state}</button>
