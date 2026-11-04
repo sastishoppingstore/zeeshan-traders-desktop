@@ -4,22 +4,75 @@
   "description": "ذیشان ٹریڈرز — کھاد، پیسٹی سائیڈ، اجناس اور زرعی سامان کی دکان اور کھاتا/ERP",
   "lang": "ur",
   "dir": "rtl",
-  "start_url": "/erp",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-title-overlay", "standalone"],
+  "display_override": [
+    "window-title-overlay",
+    "standalone"
+  ],
   "orientation": "any",
   "background_color": "#F6F8F6",
   "theme_color": "#1B6B3A",
-  "categories": ["business", "shopping", "productivity"],
+  "categories": [
+    "business",
+    "shopping",
+    "productivity"
+  ],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "فروخت کا بل", "short_name": "نیا بل", "url": "/erp/sales", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "مصنوعات", "short_name": "مصنوعات", "url": "/products", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "آرڈر بھیجیں", "short_name": "آرڈر", "url": "/checkout", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
-  ]
+    {
+      "name": "فروخت کا بل",
+      "short_name": "نیا بل",
+      "url": "/erp/sales",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "مصنوعات",
+      "short_name": "مصنوعات",
+      "url": "/products",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "آرڈر بھیجیں",
+      "short_name": "آرڈر",
+      "url": "/checkout",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "id": "/"
 }

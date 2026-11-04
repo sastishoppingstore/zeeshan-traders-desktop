@@ -268,7 +268,10 @@ function drawFunctionPatterns(version: number, mod: Uint8Array, reserved: Uint8A
   // Format info: row 8 / col 8 in both the top-left and the split top-right + bottom-left copy.
   for (let i = 0; i <= 8; i++) { reserved[at(8, i)] = 1; reserved[at(i, 8)] = 1; }
   for (let i = 0; i < 8; i++) { reserved[at(8, size - 1 - i)] = 1; reserved[at(size - 1 - i, 8)] = 1; }
-  mod[at(size - 8, 8)] = 1; reserved[at(size - 8, 8)] = 1;   // the always-dark module
+  // The always-dark module: reserved (never masked, never data), but drawn only with the format
+  // information. Leaving it light during mask evaluation matches ISO 7.8.3 — the reference
+  // implementation scores masks before any format/version modules are drawn.
+  reserved[at(size - 8, 8)] = 1;
   if (version >= 7) {
     for (let i = 0; i < 6; i++) {
       for (let k = 0; k < 3; k++) {

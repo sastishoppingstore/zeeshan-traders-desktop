@@ -76,10 +76,14 @@ try {
         for (const img of pending) { img.addEventListener('load', tick, { once: true }); img.addEventListener('error', tick, { once: true }); }
         setTimeout(done, 5000);
       })).catch(() => {});
+      // The hero cube auto-advances every 4200 ms. Where that tick lands inside the frozen 5 s
+      // depends on when the component mounted, which flipped home screenshots between runs.
+      // Pin it to the first face so the shutter always sees the same rotation.
+      await page.evaluate(() => document.querySelector('.cube-dot')?.click()).catch(() => {});
       await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}' }).catch(() => {});
       await page.waitForTimeout(350);
       const file = `${spec.name}-${vp.name}.png`;
-      const buf = await page.screenshot({ type: 'png', fullPage: false });
+      const buf = await page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' });
       const baseline = path.join(BASE_DIR, file);
       const img = PNG.sync.read(buf);
       let mismatch = 0, compared = false;
@@ -98,7 +102,7 @@ try {
       // Small evidence JPEG for the handover (home + dashboard at all four breakpoints).
       if (spec.name === 'home' || spec.name === 'dashboard') {
         writeFileSync(path.join(SHOT_DIR, `${spec.name}-${vp.name}.jpg`),
-          await page.screenshot({ type: 'jpeg', quality: 62, fullPage: false }));
+          await page.screenshot({ type: 'jpeg', quality: 62, fullPage: false, animations: 'disabled' }));
       }
       console.log(`${spec.name.padEnd(10)} ${vp.name.padEnd(5)} http=${res?.status()} ${img.width}x${img.height} ${compared ? `diff=${pct}%` : 'BASELINE WRITTEN'}`);
     }

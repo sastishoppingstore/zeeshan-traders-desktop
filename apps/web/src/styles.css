@@ -340,12 +340,13 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 
 /* ------------------------------- Hero cube -------------------------------- */
 .cube { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px;
-  perspective: 1100px; padding-block: 12px; }
+  perspective: 1200px; padding-block: 12px; }
 .cube-glow { position: absolute; inset: 8% 6%; z-index: 0; pointer-events: none;
   background: radial-gradient(58% 52% at 50% 46%, rgba(183,121,31,.42), rgba(20,83,45,.14) 60%, transparent 76%);
   filter: blur(18px); }
 .cube-stage { position: relative; z-index: 1; --cube-half: calc(var(--cube-size) / 2);
   inline-size: var(--cube-size); block-size: var(--cube-size);
+  perspective: 1200px; transform-style: preserve-3d;
   animation: cube-float 7.5s var(--ease) infinite alternate; cursor: grab;
   touch-action: pan-y; }
 .cube-stage[data-drag='true'] { cursor: grabbing; }
@@ -354,12 +355,12 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 @keyframes cube-float { from { transform: translate3d(0, -8px, 0); } to { transform: translate3d(0, 10px, 0); } }
 .cube-body { position: absolute; inset: 0; transform-style: preserve-3d;
   transform: rotateX(-13deg) rotateY(var(--cube-rot, 0deg));
-  transition: transform 620ms var(--ease); }
+  transition: transform 620ms var(--ease); will-change: transform; }
 /* Small radius: at 14px the corners of neighbouring faces did not meet and daylight showed through
    the seams, which is what made the block read as a flat fan instead of a closed box. */
 .cube-face { position: absolute; inset: 0; overflow: hidden; border-radius: 6px;
   border: 2px solid rgba(255,255,255,.5); box-shadow: 0 0 0 1px rgba(11,42,24,.35), 0 18px 34px -18px rgba(11,42,24,.7);
-  background: var(--brand-800); backface-visibility: hidden; }
+  background: var(--brand-800); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .cube-face-shade { position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(6,20,12,.14), rgba(6,20,12,.62));
   opacity: calc(1 - var(--lit, .8)); transition: opacity 620ms linear; }
@@ -380,11 +381,14 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 @keyframes cube-caption-in { from { opacity: 0; transform: translateY(6px); } }
 /* The -13deg tilt throws the front face's lower edge past the stage box, so the row under the cube
    needs clearance or the dots print on top of the product card. */
-.cube-dots { position: relative; z-index: 1; display: flex; gap: 10px; margin-block-start: 16px; }
-.cube-dot { inline-size: 12px; block-size: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,.6);
-  background: rgba(255,255,255,.3); padding: 0; cursor: pointer; transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) linear; }
-.cube-dot:hover { transform: scale(1.25); }
-.cube-dot-active { background: var(--accent-400); transform: scale(1.3); box-shadow: var(--shadow-gold); }
+.cube-dots { position: relative; z-index: 1; display: flex; gap: 0; margin-block-start: 16px; }
+/* The dot is 12px and the button around it 30px — a thumb can actually hit it. */
+.cube-dot { position: relative; inline-size: 30px; block-size: 30px; border: 0; background: none; padding: 0; cursor: pointer; }
+.cube-dot::after { content: ''; position: absolute; inset: 9px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.3);
+  transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) linear; }
+.cube-dot:hover::after { transform: scale(1.25); }
+.cube-dot-active::after { background: var(--accent-400); transform: scale(1.3); box-shadow: var(--shadow-gold); }
 .cube-on-dark .cube-caption { color: #EAF2EC; }
 @media (min-width: 768px) { .cube-caption { font-size: 22px; } }
 
@@ -437,6 +441,39 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 @media (min-width: 560px) { .tile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 768px) { .tile-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
 @media (min-width: 1280px) { .tile-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* Home category showcase: small enough to read as a shelf on a phone, and each tile
+   hovers over its own shadow. The bob animates `translate` — an independent transform
+   property — so it composes with the pointer tilt in `transform` instead of replacing it. */
+.tile-grid-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile-grid-cats > .reveal { display: flex; }          /* every tile in a row keeps one height */
+.tile-grid-cats .tile { flex: 1; border-radius: 14px; box-shadow: var(--shadow-2);
+  will-change: translate; animation: tile-bob 6.4s var(--ease) infinite; }
+.tile-grid-cats .tile-media { aspect-ratio: 1 / 1; }
+.tile-grid-cats .tile-body { padding: 6px 7px 8px; gap: 0; }
+.tile-grid-cats .tile-title { font-size: 12.5px; line-height: 1.3; }
+.tile-grid-cats .tile-sub { display: none; }          /* no room for a second line at this width */
+.tile-grid-cats .tile-badge .chip { min-height: 20px; padding: 0 7px; font-size: 11px; }
+.tile-grid-cats .tile-edge { block-size: 3px; opacity: .8; }
+/* Detuned per column so the shelf never bobs as one block. */
+.tile-grid-cats > .reveal:nth-child(3n+1) .tile { animation-duration: 6.4s; animation-delay: -.9s; }
+.tile-grid-cats > .reveal:nth-child(3n+2) .tile { animation-duration: 7.2s; animation-delay: -2.4s; }
+.tile-grid-cats > .reveal:nth-child(3n) .tile { animation-duration: 5.8s; animation-delay: -3.7s; }
+.tile-grid-cats .tile:hover { animation-play-state: paused; }
+@keyframes tile-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 calc(var(--bob, 6px) * -1); } }
+@media (hover: none) { .tile-grid-cats .tile:hover { animation-play-state: running; } }
+@media (prefers-reduced-motion: reduce) { .tile-grid-cats .tile, .hero-cats .tile { animation: none; will-change: auto; } }
+@media (min-width: 560px) { .tile-grid-cats { gap: 12px; } }
+@media (min-width: 768px) {
+  .tile-grid-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .tile-grid-cats .tile { border-radius: var(--radius-card); }
+  .tile-grid-cats .tile-media { aspect-ratio: 4 / 3; }
+  .tile-grid-cats .tile-body { padding: 10px 12px 12px; gap: 2px; }
+  .tile-grid-cats .tile-title { font-size: 15px; }
+  .tile-grid-cats .tile-sub { display: block; }
+  .tile-grid-cats .tile-badge .chip { min-height: 26px; padding: 1px 10px; font-size: 12px; }
+}
+@media (min-width: 1280px) { .tile-grid-cats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 
 /* ------------------------------- Public layout ---------------------------- */
 .pub-shell { position: relative; display: flex; flex-direction: column; min-height: 100dvh; }
@@ -734,26 +771,43 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 }
 
 /* -------------------------------- ERP surfaces ------------------------------ */
-.erp-login { position: relative; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px calc(24px + var(--safe-b));
-  overflow: hidden; background: radial-gradient(120% 90% at 10% 0%, #1B6B3A, transparent 55%),
+.erp-login { position: relative; min-height: 100dvh; display: grid; place-items: center; align-content: center;
+  padding: 20px 14px calc(20px + var(--safe-b)); overflow: hidden; background: radial-gradient(120% 90% at 10% 0%, #1B6B3A, transparent 55%),
     radial-gradient(100% 90% at 92% 12%, rgba(183,121,31,.5), transparent 52%),
     linear-gradient(170deg, #0B2A18, #071A10 70%); color: #EAF2EC; }
-.erp-login .login-card { position: relative; z-index: 2; inline-size: min(460px, 100%); padding: 24px; border-radius: var(--radius-hero);
-  background: rgba(255,255,255,.94); color: var(--ink-900); box-shadow: var(--shadow-3); border: 1px solid rgba(255,255,255,.5); }
-.erp-login .login-brand { display: flex; align-items: center; gap: 12px; margin-block-end: 14px; }
-.erp-login .login-brand img { inline-size: 52px; block-size: 52px; border-radius: 16px; object-fit: cover; box-shadow: var(--shadow-1); }
-.erp-login .login-brand strong { font-family: var(--font-public); font-size: 22px; line-height: 1.8; display: block; }
-.erp-login .login-side { position: relative; z-index: 2; color: #EAF2EC; max-inline-size: 520px; text-align: center; margin-block-end: 24px; }
-.erp-login .login-side h1 { color: #F6FCF7; font-family: var(--font-public); line-height: 1.8; }
+/* The card is a ledger page: gold ruled head, faint accountants' rules at the foot. */
+.erp-login .login-card { position: relative; z-index: 2; inline-size: min(430px, 100%); padding: 20px 16px 18px;
+  border-radius: 20px; color: var(--ink-900); border: 1px solid rgba(255,255,255,.55); overflow: hidden;
+  box-shadow: var(--shadow-3), 0 0 0 1px rgba(231,193,115,.28);
+  background: repeating-linear-gradient(180deg, rgba(27,107,58,0) 0 27px, rgba(27,107,58,.06) 27px 28px) left bottom / 100% 40% no-repeat,
+    rgba(255,255,255,.96); }
+.erp-login .login-card::before { content: ''; position: absolute; inset-inline: 0; inset-block-start: 0; block-size: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent-400) 20%, var(--accent-600) 55%, var(--accent-400) 80%, transparent); }
+.erp-login .login-brand { display: flex; align-items: center; gap: 10px; margin-block-end: 10px; }
+.erp-login .login-brand img { inline-size: 44px; block-size: 44px; border-radius: 13px; object-fit: cover; box-shadow: var(--shadow-1); }
+.erp-login .login-brand strong { font-family: var(--font-public); font-size: 18px; line-height: 1.6; display: block; }
+.erp-login .login-card h2 { font-family: var(--font-public); font-size: 20px; line-height: 1.9; margin-block: 0 12px;
+  padding-block-start: 10px; border-block-start: 1px solid var(--line); }
+.erp-login .field { margin-block-end: 12px; }
+.erp-login .field > label { font-size: 14px; }
+.erp-login .input { min-height: 46px; }
+.erp-login .btn-block { min-height: 48px; }
+.erp-login .login-side { position: relative; z-index: 2; color: #EAF2EC; max-inline-size: 520px; text-align: center; margin-block-end: 18px; }
+.erp-login .login-side h1 { color: #F6FCF7; font-family: var(--font-public); line-height: 1.8; font-size: clamp(26px, 8vw, 40px); }
+.login-tag { font-size: 14px; color: #CDE5D5; margin-block: 4px 0; }
 .login-mark { inline-size: 64px; block-size: 64px; border-radius: 18px; object-fit: cover; margin-block-end: 14px;
   box-shadow: 0 18px 40px rgba(4,26,14,.55), inset 0 0 0 1.5px rgba(231,193,115,.5);
   animation: mark-float 6s ease-in-out infinite; will-change: transform; }
 @keyframes mark-float { 0%,100% { transform: translate3d(0,0,0) rotateY(-8deg); } 50% { transform: translate3d(0,-10px,0) rotateY(8deg); } }
 @media (prefers-reduced-motion: reduce) { .login-mark { animation: none; } }
 .erp-login .login-side p { color: #CDE5D5; }
+.login-split { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; color: var(--ink-500); font-size: 12px; }
+.login-split::before, .login-split::after { content: ''; flex: 1; block-size: 1px; background: var(--line); }
+.login-note { font-size: 12px; color: var(--ink-500); text-align: center; margin-block: 10px 0; }
 @media (min-width: 1024px) {
   .erp-login { grid-template-columns: 1.1fr .9fr; place-items: center; gap: 48px; padding-inline: 56px; }
   .erp-login .login-side { text-align: start; margin-block-end: 0; }
+  .erp-login .login-card { padding: 26px 28px 24px; }
 }
 .module-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 768px) { .module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -786,6 +840,24 @@ code { overflow-wrap: anywhere; word-break: break-word; }
   .overlay { align-items: center; padding: 24px; }
   .sheet { border-radius: var(--radius-sheet); padding-block-end: 20px; margin-inline: auto; }
   .sheet .handle { display: none; }
+}
+
+/* PWA install sheet: the app mark is the hero, the copy stays at two lines. */
+.install-card { background: var(--surface); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  inline-size: 100%; max-inline-size: 460px; padding: 14px 16px calc(16px + var(--safe-b));
+  box-shadow: var(--shadow-3); text-align: center; animation: sheet-up var(--dur) var(--ease); }
+.install-card .handle { inline-size: 44px; block-size: 5px; border-radius: 3px; background: var(--line-strong); margin: 0 auto 12px; }
+.install-icon { inline-size: 56px; block-size: 56px; border-radius: 16px; object-fit: cover;
+  box-shadow: 0 10px 26px rgba(11,42,24,.28), 0 0 0 3px rgba(231,193,115,.45); }
+.install-card h2 { font-family: var(--font-public); font-size: 20px; line-height: 1.9; margin-block: 6px 2px; }
+.install-card > p { color: var(--ink-500); font-size: 14px; margin-block: 0 12px; }
+.install-steps { text-align: start; margin: 0 0 14px; padding-inline-start: 22px; display: grid; gap: 6px;
+  font-size: 14px; color: var(--ink-700); }
+.install-steps li::marker { color: var(--accent-600); font-weight: 700; }
+.install-actions { display: grid; gap: 8px; }
+@media (min-width: 768px) {
+  .install-card { border-radius: var(--radius-sheet); padding-block-end: 18px; }
+  .install-card .handle { display: none; }
 }
 .tabs { display: flex; gap: 6px; overflow-x: auto; padding-block-end: 6px; margin-block-end: 14px; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -1098,6 +1170,18 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 .hero-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; }
 @media (min-width: 560px) { .hero-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* On a phone the hero strip is four floating photo chips, not a second showcase. */
+@media (max-width: 559.98px) {
+  .hero-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .hero-cats .tile { --bob: 4px; box-shadow: var(--shadow-2); will-change: translate;
+    animation: tile-bob 5.6s var(--ease) infinite; }
+  .hero-cats .tile:nth-child(2) { animation-delay: -1.4s; }
+  .hero-cats .tile:nth-child(3) { animation-delay: -2.8s; }
+  .hero-cats .tile:nth-child(4) { animation-delay: -4.2s; }
+  .hero-cats .tile-body { padding: 4px 5px 6px; }
+  .hero-cats .tile-title { font-size: 11px; line-height: 1.25; min-height: 2.5em; }
+  .hero-cats .tile-sub { display: none; }
+}
 @media (min-width: 1024px) {
   .hero-layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
     grid-template-areas: 'copy cube' 'cats cube' 'cta cube'; align-items: start; }

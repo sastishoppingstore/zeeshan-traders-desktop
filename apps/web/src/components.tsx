@@ -123,7 +123,7 @@ export function StatCard({ label, value, sub, tone, onClick }: {
 }
 
 export function Skeleton({ rows = 3 }: { rows?: number }) {
-  return <div aria-busy="true" aria-label="لوڈ ہو رہا ہے">{Array.from({ length: rows }).map((_, i) =>
+  return <div role="status" aria-busy="true" aria-label="لوڈ ہو رہا ہے">{Array.from({ length: rows }).map((_, i) =>
     <div key={i} className="card" style={{ marginBlockEnd: 10 }}>
       <div className="skeleton" style={{ width: '45%', marginBlockEnd: 10 }} />
       <div className="skeleton" style={{ width: '75%' }} />

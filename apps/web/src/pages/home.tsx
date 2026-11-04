@@ -94,6 +94,9 @@ export function Home() {
         </div>
         <div className="hero-cta btn-row">
           <Link className="btn btn-primary" to="/products">{t('viewProducts')}</Link>
+          <button type="button" className="btn btn-gold" onClick={() => window.dispatchEvent(new CustomEvent('zt:open-install'))}>
+            {lang === 'ur' ? 'ایپ انسٹال کریں' : 'Install App'}
+          </button>
           <a className="btn btn-wa" href={b.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer">
             <span className="chat-mark" aria-hidden="true" />{t('contactWhatsapp')}</a>
         </div>
@@ -134,7 +137,7 @@ export function Home() {
       <section className="section">
         <Reveal><SectionHead kicker={<Eyebrow>{lang === 'ur' ? 'پرچھٹ' : 'Catalogue'}</Eyebrow>} title={t('categories')}
           action={<Link to="/products">{t('viewAll')} ›</Link>} /></Reveal>
-        <div className="tile-grid">{headline.map((c, i) =>
+        <div className="tile-grid tile-grid-cats">{headline.map((c, i) =>
           <Reveal key={c.id} delay={i * 45}>
             <MediaTile photo={c.photo} title={bi(c.name_ur, c.name_en)} subtitle={lang === 'ur' ? c.name_en : c.name_ur}
               href={`/category/${c.slug}`} badge={<Chip tone="gray">{c.product_count ?? 0}</Chip>} />
@@ -194,7 +197,7 @@ export function Home() {
       {/* 7 — agricultural showcase */}
       <section className="section">
         <Reveal><SectionHead kicker={<Eyebrow>{lang === 'ur' ? 'دکان پر' : 'On the ground'}</Eyebrow>} title={t('goods')} /></Reveal>
-        <div className="showcase-strip">
+        <div className="showcase-strip" tabIndex={0} role="region" aria-label={lang === 'ur' ? 'دکان کی تصاویر' : 'Shop photos'}>
           {SHOWCASE_MEDIA.map((m, i) => <Reveal key={m.key} delay={i * 50} className="showcase-cell">
             <figure><Photo src={IMAGES[m.key].md} alt={lang === 'ur' ? m.alt_ur : m.alt_en} ratio={4 / 3} /></figure>
             <figcaption>{lang === 'ur' ? m.alt_ur : m.alt_en}</figcaption>

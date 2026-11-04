@@ -210,7 +210,7 @@ function Login() {
       <Reveal>
         <img className="login-mark" src="/brand/logo-96.png" alt="ذیشان ٹریڈرز کا نشان" width={64} height={64} />
         <h1 className="h-nastaliq">ذیشان ٹریڈرز</h1>
-        <p>کھاد، پیسٹی سائیڈ، چوکر، ونڈا، سیمنٹ، بیج اور سات اجناس — خرید و فروخت، کھاتہ، اسٹاک اور رپورٹس ایک ہی نظام میں۔</p>
+        <p className="login-tag">کھاد، اجناس اور کھاتہ — مقصود چوک، ضلع لیہ</p>
       </Reveal>
     </div>
     <form className="login-card" onSubmit={submit}>
@@ -218,22 +218,23 @@ function Login() {
         <img src={IMAGES['about/about-shop'].md} alt="" width={52} height={52} />
         <span><strong>کھاتہ (ERP)</strong><small className="small">Zeeshan Traders · Ledger</small></span>
       </div>
-      <h2>لاگ ان</h2>
+      <h2>خوش آمدید</h2>
       <TextField label={t('username')} value={username} onChange={setUsername} required autoComplete="username" />
       <TextField label={t('password')} value={password} onChange={setPassword} type={show ? 'text' : 'password'} required autoComplete="current-password" />
       <CheckField label="پاس ورڈ دکھائیں" checked={show} onChange={setShow} />
       {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
       <Button type="submit" loading={busy} className="btn-block">لاگ ان</Button>
-      {passkeysSupported() && <Button type="button" variant="secondary" className="btn-block" loading={pkBusy}
-        onClick={async () => {
-          setPkBusy(true); setErr('');
-          try { await loginWithPasskey(); await reloadSession(); nav('/erp'); }
-          catch (e: any) { setErr(e.message_ur ?? String(e)); }
-          finally { setPkBusy(false); }
-        }}><Mark kind="key" /> فنگر پرنٹ / پاس کی سے لاگ ان</Button>}
-      <div className="notice info small" style={{ marginBlockStart: 8 }}>پاس کی ڈیوائس کے اپنے بائیو میٹرک سے چیلنج پر دستخط کرتی ہے؛
-        فنگر پرنٹ کبھی ویب سائٹ یا سرور تک نہیں پہنچتا۔ ڈومین تبدیل ہونے سے پہلے پاس کی رجسٹر کریں (RP ID ڈومین سے بندھا ہے)۔</div>
-      {setupStatus?.local_preview && <div className="notice small">مقامی پیش نظارہ: سیٹ اپ ٹوکن سرور لاگ اور <code>/api/v1/setup/status</code> میں موجود ہے۔</div>}
+      {passkeysSupported() && <>
+        <div className="login-split" aria-hidden="true"><span>یا</span></div>
+        <Button type="button" variant="secondary" className="btn-block" loading={pkBusy}
+          onClick={async () => {
+            setPkBusy(true); setErr('');
+            try { await loginWithPasskey(); await reloadSession(); nav('/erp'); }
+            catch (e: any) { setErr(e.message_ur ?? String(e)); }
+            finally { setPkBusy(false); }
+          }}><Mark kind="key" /> فنگر پرنٹ سے لاگ ان</Button>
+        <p className="login-note">بائو میٹرک اسی ڈیوائس پر رہتا ہے — سرور تک کچھ نہیں جاتا۔</p>
+      </>}
     </form>
   </div>;
 }

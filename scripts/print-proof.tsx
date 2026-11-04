@@ -134,7 +134,7 @@ Checks: A4 keeps the 5-column table (\`#\`/تفصیل/تعداد/ریٹ/رقم),
 its notes are hidden in print media. No format overflows horizontally at 390 px.
 The scan-to-verify QR is rendered exactly once on **A4** and **80 mm** (the two formats the owner
 asked for) and is deliberately **absent from A5**. It is a synchronous 1-bit PNG data URL, so it
-survives `renderToStaticMarkup` and prints crisp; `doc_id` is omitted on provisional snapshots,
+survives \`renderToStaticMarkup\` and prints crisp; \`doc_id\` is omitted on provisional snapshots,
 in which case no QR is drawn rather than a made-up code.
 
 **Result: ${ok ? 'PASS' : 'FAIL'}**${missing.length ? ` — failing: ${missing.join(', ')}` : ''}

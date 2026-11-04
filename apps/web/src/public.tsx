@@ -67,7 +67,7 @@ function Header({ business }: { business: any }) {
     <div className="row" style={{ gap: 8 }}>
       <CartButton />
       <button className="btn btn-ghost btn-sm" onClick={() => setLang(lang === 'ur' ? 'en' : 'ur')}
-        aria-label={lang === 'ur' ? 'Switch to English' : 'اردو میں بدلیں'}>
+        aria-label={lang === 'ur' ? 'EN — Switch to English' : 'UR — اردو میں بدلیں'}>
         {lang === 'ur' ? 'EN' : 'UR'}
       </button>
       <a className="btn btn-wa btn-sm pub-nav-cta" href={b.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer">
@@ -79,6 +79,10 @@ function Header({ business }: { business: any }) {
     </div>
     {open && <div className="card pub-menu-pop">
       {nav.map(([to, label]) => <Link key={to} to={to}>{label}</Link>)}
+      <button type="button" className="btn btn-ghost btn-sm" style={{ textAlign: 'start', justifyContent: 'flex-start' }}
+        onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('zt:open-install')); }}>
+        {lang === 'ur' ? 'ایپ انسٹال کریں' : 'Install App'}
+      </button>
       <Link to="/enquiry">{t('enquiry')}</Link>
       <Link to="/erp">{t('erpArea')}</Link>
     </div>}

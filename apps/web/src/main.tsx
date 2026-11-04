@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppProvider, useApp } from './app-state.js';
 import { PublicApp } from './public.js';
 import { ToastHost } from './components.js';
+import { InstallPrompt } from './ui/install.js';
 import './styles.css';
 
 /** The ERP (screens, forms, print templates) is a separate chunk: a customer browsing the shop
@@ -30,6 +31,7 @@ function Root() {
           <Route path="*" element={<PublicApp />} />
         </Routes>
         <ToastHost />
+        <InstallPrompt />
       </AppProvider>
     </BrowserRouter>
   </QueryClientProvider>;

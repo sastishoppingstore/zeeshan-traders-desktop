@@ -42,8 +42,15 @@ export function cubeFaces(products: any[], fallback: PhotoRef[] = HERO_CUBE): Cu
       img: media?.src, alt_ur: alt, alt_en: p.name_en || alt,
     });
   }
-  if (picked.length >= 2) return picked;
-  return toFaces(fallback);
+  // Guarantee a complete solid 4-sided cube: pad with fallback photos if fewer than 4 items
+  if (picked.length < 4) {
+    const fb = toFaces(fallback);
+    for (const f of fb) {
+      if (picked.length >= 4) break;
+      picked.push(f);
+    }
+  }
+  return picked;
 }
 
 /** How square a side face is to the eye: 1 facing us, 0 edge-on. Drives the shading overlay. */
@@ -63,14 +70,14 @@ export function HeroCube({ faces, products, className = '' }: {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const faceRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const angleRef = useRef(0);
   const dragDeg = useRef(0);
   const startX = useRef(0);
   const frame = useRef(0);
   const count = items.length || 1;
 
-  /** The one place rotation is applied: the body's CSS var, plus per-face lighting for the depth.
-   *  Never React state — a setState per pointermove re-rendered all four faces and the spin trailed
-   *  the cursor by seconds on a mid phone. */
+  /** The one place rotation is applied: the body's CSS var, plus per-face lighting for depth.
+   *  Direct DOM CSS custom property mutation avoids re-rendering all faces on every pointer tick. */
   const paint = (deg: number) => {
     const body = bodyRef.current;
     if (!body) return;
@@ -80,20 +87,53 @@ export function HeroCube({ faces, products, className = '' }: {
     }
   };
 
+  /** Rotate continuously forward in one direction — never rewinding or spinning backward. */
+  const stepForward = () => {
+    angleRef.current -= STEP;
+    const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    setFace(nextFace);
+    paint(angleRef.current);
+  };
+
+  const stepBackward = () => {
+    angleRef.current += STEP;
+    const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    setFace(nextFace);
+    paint(angleRef.current);
+  };
+
+  /** Navigate to a specific face using the shortest angular path. */
+  const goToFace = (targetIndex: number) => {
+    dragDeg.current = 0;
+    const currentNormalized = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    let diff = targetIndex - currentNormalized;
+    if (diff > count / 2) diff -= count;
+    if (diff < -count / 2) diff += count;
+    angleRef.current -= diff * STEP;
+    setFace(targetIndex);
+    paint(angleRef.current);
+  };
+
   useEffect(() => {
     if (reduced || paused || dragging) return;
-    const iv = window.setInterval(() => setFace((f) => (f + 1) % count), AUTO_MS);
+    const iv = window.setInterval(stepForward, AUTO_MS);
     return () => window.clearInterval(iv);
   }, [reduced, paused, dragging, count]);
 
-  // A committed rotation (no live drag) repaints when the face or the face list changes.
-  useEffect(() => { paint(-STEP * face); }, [face, items.length, reduced]);
+  // Initial paint and resize sync
+  useEffect(() => { paint(angleRef.current); }, [items.length, reduced]);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (!groupRef.current?.contains(document.activeElement)) return;
-      if (ev.key === 'ArrowRight') setFace((f) => (f + 1) % count);
-      if (ev.key === 'ArrowLeft') setFace((f) => (f - 1 + count) % count);
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        stepForward();
+      }
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        stepBackward();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -106,27 +146,30 @@ export function HeroCube({ faces, products, className = '' }: {
     startX.current = ev.clientX;
     dragDeg.current = 0;
     setDragging(true);
-    // Mouse and pen may capture; a touch must not — capturing a touch pointer stops the browser
-    // handing the vertical gesture back to the page, and the hero could then not be scrolled past.
+    // Mouse and pen may capture; a touch must not — capturing touch blocks scrolling past the hero.
     if (ev.pointerType !== 'touch') stageRef.current?.setPointerCapture?.(ev.pointerId);
   };
+
   const onMove = (ev: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragging) return;
     dragDeg.current = (ev.clientX - startX.current) * DRAG_SENSITIVITY;
     if (frame.current) return;
-    const deg = dragDeg.current;
     frame.current = window.requestAnimationFrame(() => {
       frame.current = 0;
-      paint(-STEP * face + deg);
+      paint(angleRef.current + dragDeg.current);
     });
   };
+
   const onUp = () => {
     if (!dragging) return;
-    const turns = Math.round(dragDeg.current / STEP);
+    angleRef.current += dragDeg.current;
+    // Snap cleanly to the nearest 90-degree step
+    angleRef.current = Math.round(angleRef.current / STEP) * STEP;
     dragDeg.current = 0;
     setDragging(false);
-    if (turns) setFace((f) => (((f - turns) % count) + count) % count);
-    else paint(-STEP * face);
+    const nextFace = (Math.round(-angleRef.current / STEP) % count + count) % count;
+    setFace(nextFace);
+    paint(angleRef.current);
   };
 
   const current = items[face];
@@ -166,7 +209,7 @@ export function HeroCube({ faces, products, className = '' }: {
       {items.map((f, i) => <button type="button" key={f.key} role="tab"
         className={`cube-dot ${i === face ? 'cube-dot-active' : ''}`}
         aria-selected={i === face} aria-label={lang === 'ur' ? f.alt_ur : f.alt_en}
-        onClick={() => { dragDeg.current = 0; setFace(i); }} />)}
+        onClick={() => goToFace(i)} />)}
     </div>
   </div>;
 }
