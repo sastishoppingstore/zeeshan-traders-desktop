@@ -35,6 +35,58 @@ const WHY = [
     body_en: 'Wheat, rice, sesame, millet, maize, moong and mustard each keep their own ledger.' },
 ];
 
+/** Round "Goal" Category Slider — horizontal sliding strip of small circular category cards */
+function GoalCategorySlider({ categories }: { categories: any[] }) {
+  const { lang, bi } = useApp();
+  const trackRef = React.useRef<HTMLDivElement | null>(null);
+
+  const slide = (dir: 'left' | 'right') => {
+    if (!trackRef.current) return;
+    const amount = Math.max(220, Math.floor(trackRef.current.clientWidth * 0.7));
+    trackRef.current.scrollBy({
+      left: dir === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <div className="cat-slider-wrap">
+      <button type="button" className="cat-slide-btn cat-slide-prev"
+        onClick={() => slide(lang === 'ur' ? 'right' : 'left')}
+        aria-label={lang === 'ur' ? 'پچھلا' : 'Previous'}>
+        ‹
+      </button>
+      <div className="cat-slider-track" ref={trackRef} tabIndex={0} role="region"
+        aria-label={lang === 'ur' ? 'زمرے' : 'Categories'}>
+        {categories.map((c) => {
+          const photo = c.photo ? IMAGES[c.photo.key as keyof typeof IMAGES]?.md : null;
+          const name = bi(c.name_ur, c.name_en);
+          return (
+            <Link key={c.id || c.slug} to={`/category/${c.slug}`} className="cat-goal-item">
+              <div className="cat-goal-circle">
+                {photo ? (
+                  <img src={photo} alt={name} width={80} height={80} loading="lazy" decoding="async" />
+                ) : (
+                  <span className="cat-goal-fallback">{name.slice(0, 2)}</span>
+                )}
+                {c.product_count != null && c.product_count > 0 && (
+                  <span className="cat-goal-badge num">{c.product_count}</span>
+                )}
+              </div>
+              <span className="cat-goal-title">{name}</span>
+            </Link>
+          );
+        })}
+      </div>
+      <button type="button" className="cat-slide-btn cat-slide-next"
+        onClick={() => slide(lang === 'ur' ? 'left' : 'right')}
+        aria-label={lang === 'ur' ? 'اگلا' : 'Next'}>
+        ›
+      </button>
+    </div>
+  );
+}
+
 export function Home() {
   const { t, lang, bi } = useApp();
   const { data, isLoading, error, refetch } = useGet<any>('public-home', '/api/v1/public/home');
@@ -44,6 +96,10 @@ export function Home() {
   useParallax(heroRef);
 
   const cats = (data?.categories ?? []).filter((c: any) => !c.parent_id);
+  const allSliderCats = (data?.categories ?? []).map((c: any) => {
+    const photo = categoryMedia(c) || CATEGORY_MEDIA[c.code];
+    return { ...c, photo };
+  });
   const headline = HEADLINE_CODES.map((code) => {
     const row = cats.find((c: any) => c.code === code);
     return row ? { ...row, photo: categoryMedia(row) } : null;
@@ -135,13 +191,9 @@ export function Home() {
 
       {/* 3 — category showcase */}
       <section className="section">
-        <Reveal><SectionHead kicker={<Eyebrow>{lang === 'ur' ? 'پرچھٹ' : 'Catalogue'}</Eyebrow>} title={t('categories')}
+        <Reveal><SectionHead kicker={<Eyebrow>{lang === 'ur' ? 'زمرے' : 'Categories'}</Eyebrow>} title={t('categories')}
           action={<Link to="/products">{t('viewAll')} ›</Link>} /></Reveal>
-        <div className="tile-grid tile-grid-cats">{headline.map((c, i) =>
-          <Reveal key={c.id} delay={i * 45}>
-            <MediaTile photo={c.photo} title={bi(c.name_ur, c.name_en)} subtitle={lang === 'ur' ? c.name_en : c.name_ur}
-              href={`/category/${c.slug}`} badge={<Chip tone="gray">{c.product_count ?? 0}</Chip>} />
-          </Reveal>)}</div>
+        <GoalCategorySlider categories={allSliderCats.length ? allSliderCats : headline} />
       </section>
 
       {/* 4 — sixteen-item shelf: featured leads, newest fills, everything else stays on /products */}

@@ -62,9 +62,9 @@ function pageHtml(f: (typeof FORMATS)[number]) {
 }
 
 const rows: any[] = [];
-for (const vp of VIEWPORTS) {
-  const browser = await launchBrowser();
-  try {
+const browser = await launchBrowser();
+try {
+  for (const vp of VIEWPORTS) {
     for (const f of FORMATS) {
       const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height },
         isMobile: vp.mobile, hasTouch: vp.mobile, deviceScaleFactor: 1, locale: 'ur-PK', ...(vp.ua ? { userAgent: vp.ua } : {}) });
@@ -105,7 +105,9 @@ for (const vp of VIEWPORTS) {
       console.log(`${f.size}/${vp.name}: nastaliq=${probe.nastaliq} naskh=${probe.naskh} name=${Math.round(probe.width)}px thermal=${probe.thermalLines} th=${probe.th} qr=${probe.qr} overflowX=${probe.overflowX} -> ${jpg}`);
       await context.close();
     }
-  } finally { await browser.close(); }
+  }
+} finally {
+  await browser.close();
 }
 
 const ok = rows.every((r) => r.nastaliq && r.naskh && r.width > 100 && r.hasDoc && !r.overflowX && r.barHiddenInPrint)

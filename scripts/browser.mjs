@@ -48,7 +48,13 @@ async function launchSparticuz() {
 
 export async function launchBrowser() {
   if (NATIVE) {
-    try { return await launchNative(NATIVE); } catch { /* fall through to the bundled build */ }
+    try {
+      return await launchNative(NATIVE);
+    } catch (err) {
+      if (process.arch !== 'x64') {
+        throw err;
+      }
+    }
   }
   return launchSparticuz();
 }
