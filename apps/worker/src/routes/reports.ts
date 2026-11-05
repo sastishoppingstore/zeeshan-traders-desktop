@@ -370,7 +370,7 @@ export function registerReports(app: H) {
   }));
 
   app.get('/api/v1/accounting/chart', requirePerm('accounting.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM chart_of_accounts ORDER BY code LIMIT 200').all())));
+    ok(c, await c.get('db')!.prepare('SELECT * FROM chart_of_accounts WHERE deleted=0 ORDER BY code LIMIT 200').all())));
   app.get('/api/v1/accounting/journals', requirePerm('accounting.read'), (c) => handle(c, async () => {
     const db = c.get('db')!;
     const { from, to } = range(c);

@@ -20,7 +20,7 @@ import type { DB } from '../db.js';
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
 const PROOF_TYPES = ['webp', 'jpeg', 'jpg', 'png'];
-const QR_TYPES = ['webp', 'png'];
+const QR_TYPES = ['webp', 'jpeg', 'jpg', 'png', 'avif'];
 
 /** Never leaks a hashed token, an access token, or internal ids the customer has no use for. */
 function publicOrderView(row: any, items: any[] = [], proofs: any[] = []) {
@@ -51,9 +51,10 @@ async function loadOrder(db: DB, id: string) {
 
 /** Money books are addressed by id or code ('CASH', 'MEEZAN'); always store the resolved id. */
 async function normalizeAccount(db: DB, ref?: string | null): Promise<string | null> {
-  if (!ref) return null;
+  if (!ref || !ref.trim()) return null;
+  const val = ref.trim();
   const row = await db.prepare('SELECT id FROM financial_accounts WHERE (id=? OR code=?) AND is_active=1')
-    .bind(ref, ref).first<{ id: string }>();
+    .bind(val, val).first<{ id: string }>();
   if (!row) throw new BizError(400, 'ACCOUNT_NOT_FOUND', 'کھاتہ نہیں ملا', `Ledger account not found: ${ref}`);
   return row.id;
 }
@@ -84,7 +85,7 @@ export function registerCheckout(app: H) {
     }
     const body = checkoutSchema.parse(raw);
 
-    const method = await db.prepare('SELECT * FROM payment_methods WHERE id=? AND is_active=1')
+    const method = await db.prepare('SELECT * FROM payment_methods WHERE id=? AND is_active=1 AND deleted=0')
       .bind(body.payment_method_id).first<any>();
     if (!method) throw new BizError(400, 'PAYMENT_METHOD_INVALID', 'ادائیگی کا طریقہ منتخب کریں', 'Choose a valid payment method');
 
@@ -92,7 +93,7 @@ export function registerCheckout(app: H) {
     const priced: { product: any; qty_milli: number; rate_paisa: number; line_total_paisa: number }[] = [];
     for (const line of body.items) {
       const p = await db.prepare(`SELECT id,name_ur,base_unit,is_published,is_active,show_public_price,
-        public_price_paisa,availability_mode FROM products WHERE id=?`).bind(line.product_id).first<any>();
+        public_price_paisa,availability_mode FROM products WHERE id=? AND deleted=0`).bind(line.product_id).first<any>();
       if (!p || !p.is_published || !p.is_active) {
         throw new BizError(409, 'PRODUCT_UNAVAILABLE', 'منتخب مصنوعات اب دستیاب نہیں', 'A selected product is no longer available');
       }
@@ -302,7 +303,7 @@ export function registerCheckout(app: H) {
   // ----------------------------- Admin: payment methods -----------------------------
   app.get('/api/v1/payment-methods', requirePerm('orders.read'), (c) => handle(c, async () => {
     const db = c.get('db')!;
-    const rows = await db.prepare('SELECT * FROM payment_methods ORDER BY sort,title_ur').all<any>();
+    const rows = await db.prepare('SELECT * FROM payment_methods WHERE deleted=0 ORDER BY sort,title_ur').all<any>();
     return ok(c, rows.map((r) => ({ ...r, is_active: !!r.is_active, qr_url: r.qr_key ? `/media/${r.qr_key}` : '' })));
   }));
 
@@ -344,10 +345,15 @@ export function registerCheckout(app: H) {
     const used = await db.prepare('SELECT COUNT(*) n FROM orders WHERE payment_method_id=?').bind(c.req.param('id')).first<{ n: number }>();
     if ((used?.n ?? 0) > 0) {
       // Historical orders snapshot the title, but the FK must keep pointing at a real row.
-      await db.prepare('UPDATE payment_methods SET is_active=0,updated_at=? WHERE id=?').bind(nowIso(), c.req.param('id')).run();
+      await db.prepare('UPDATE payment_methods SET is_active=0,updated_at=?,version=version+1 WHERE id=?')
+        .bind(nowIso(), c.req.param('id')).run();
       return ok(c, { id: c.req.param('id'), deactivated: true });
     }
-    await db.prepare('DELETE FROM payment_methods WHERE id=?').bind(c.req.param('id')).run();
+    // Soft delete, never a hard one: every other device learns about the removal from the
+    // tombstone that /api/v1/sync/pull keeps returning. A DELETE would vanish from the delta and
+    // leave the row alive forever on the offline PCs.
+    await db.prepare('UPDATE payment_methods SET deleted=1,is_active=0,updated_at=?,version=version+1 WHERE id=?')
+      .bind(nowIso(), c.req.param('id')).run();
     await audit(db, 'DELETE', 'payment_methods', c.req.param('id'), { user_id: me(c).id });
     return ok(c, { id: c.req.param('id'), deleted: true });
   }));
@@ -381,7 +387,7 @@ export function registerCheckout(app: H) {
   app.get('/api/v1/orders-meta/checkout-ready', requirePerm('orders.read'), (c) => handle(c, async () => {
     const db = c.get('db')!;
     const methods = await db.prepare('SELECT COUNT(*) n FROM payment_methods WHERE is_active=1').first<{ n: number }>();
-    const priced = await db.prepare('SELECT COUNT(*) n FROM products WHERE is_published=1 AND is_active=1 AND show_public_price=1 AND public_price_paisa>0').first<{ n: number }>();
+    const priced = await db.prepare('SELECT COUNT(*) n FROM products WHERE deleted=0 AND is_published=1 AND is_active=1 AND show_public_price=1 AND public_price_paisa>0').first<{ n: number }>();
     const pending = await db.prepare("SELECT COUNT(*) n FROM orders WHERE status IN ('NEW','UNDER_REVIEW')").first<{ n: number }>();
     return ok(c, {
       payment_methods: methods?.n ?? 0,

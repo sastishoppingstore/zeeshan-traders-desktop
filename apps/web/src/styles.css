@@ -480,7 +480,7 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 .tile-grid-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tile-grid-cats > .reveal { display: flex; }          /* every tile in a row keeps one height */
 .tile-grid-cats .tile { flex: 1; border-radius: 14px; box-shadow: var(--shadow-2);
-  will-change: translate; animation: tile-bob 6.4s var(--ease) infinite; }
+  will-change: transform; animation: tile-bob 6.4s var(--ease) infinite; }
 .tile-grid-cats .tile-media { aspect-ratio: 1 / 1; }
 .tile-grid-cats .tile-body { padding: 6px 7px 8px; gap: 0; }
 .tile-grid-cats .tile-title { font-size: 12.5px; line-height: 1.3; }
@@ -492,7 +492,7 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 .tile-grid-cats > .reveal:nth-child(3n+2) .tile { animation-duration: 7.2s; animation-delay: -2.4s; }
 .tile-grid-cats > .reveal:nth-child(3n) .tile { animation-duration: 5.8s; animation-delay: -3.7s; }
 .tile-grid-cats .tile:hover { animation-play-state: paused; }
-@keyframes tile-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 calc(var(--bob, 6px) * -1); } }
+@keyframes tile-bob { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, calc(var(--bob, 6px) * -1), 0); } }
 @media (hover: none) { .tile-grid-cats .tile:hover { animation-play-state: running; } }
 @media (prefers-reduced-motion: reduce) { .tile-grid-cats .tile, .hero-cats .tile { animation: none; will-change: auto; } }
 @media (min-width: 560px) { .tile-grid-cats { gap: 12px; } }
@@ -1510,7 +1510,7 @@ code { overflow-wrap: anywhere; word-break: break-word; }
 /* On a phone the hero strip is four floating photo chips, not a second showcase. */
 @media (max-width: 559.98px) {
   .hero-cats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .hero-cats .tile { --bob: 4px; box-shadow: var(--shadow-2); will-change: translate;
+  .hero-cats .tile { --bob: 4px; box-shadow: var(--shadow-2); will-change: transform;
     animation: tile-bob 5.6s var(--ease) infinite; }
   .hero-cats .tile:nth-child(2) { animation-delay: -1.4s; }
   .hero-cats .tile:nth-child(3) { animation-delay: -2.8s; }
@@ -1808,9 +1808,12 @@ code { overflow-wrap: anywhere; word-break: break-word; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.75), 0 10px 22px -14px rgba(47,28,4,.7); }
 .product-card .chip.success { position: relative; padding-inline-start: 20px; }
 .product-card .chip.success::before { content: ''; position: absolute; inset-inline-start: 8px; inset-block-start: 50%;
-  translate: 0 -50%; inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--success);
-  animation: dot-breathe 2.6s var(--ease) infinite; }
-@keyframes dot-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,.45); } 50% { box-shadow: 0 0 0 5px rgba(22,163,74,0); } }
+  transform: translateY(-50%); inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--success); }
+.product-card .chip.success::after { content: ''; position: absolute; inset-inline-start: 8px; inset-block-start: 50%;
+  inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--success);
+  transform: translateY(-50%) scale(1); will-change: transform, opacity;
+  animation: dot-breathe 2.6s var(--ease) infinite; pointer-events: none; }
+@keyframes dot-breathe { 0% { transform: translateY(-50%) scale(1); opacity: .75; } 50% { transform: translateY(-50%) scale(2.4); opacity: 0; } 100% { transform: translateY(-50%) scale(1); opacity: 0; } }
 
 /* 5 — tactile press on the shop surfaces */
 .product-card:active, .tile:active, .quick-add:active { transform: scale(.985); }

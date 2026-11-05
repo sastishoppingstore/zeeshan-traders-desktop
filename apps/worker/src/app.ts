@@ -9,6 +9,7 @@ import { registerReports } from './routes/reports.js';
 import { registerWebsite } from './routes/website.js';
 import { registerCheckout } from './routes/checkout.js';
 import { registerOps } from './routes/ops.js';
+import { registerSyncRows } from './routes/syncRows.js';
 import { registerPasskeys } from './routes/passkeys.js';
 import { socialHtml } from './services/social.js';
 
@@ -75,6 +76,7 @@ export function createApp(): H {
   registerWebsite(app);
   registerCheckout(app);
   registerOps(app);
+  registerSyncRows(app);
 
   app.notFound((c) => {
     if (c.req.path.startsWith('/api/')) return fail(c, 404, 'NOT_FOUND', 'یہ API راستہ موجود نہیں ہے', 'API route not found');

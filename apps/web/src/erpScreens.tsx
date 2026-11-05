@@ -225,15 +225,96 @@ export function ProductForm() {
   const brands = useGet<any[]>('brands-ref', '/api/v1/brands');
   const existing = useGet<any>('product', id ? `/api/v1/products/${id}` : null);
   const [uploadBusy, setUploadBusy] = useState(false);
-  useEffect(() => { if (existing.data) setP({ ...PRODUCT_DEFAULT, ...existing.data }); }, [existing.data]);
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [newBrandUr, setNewBrandUr] = useState('');
+  const [newBrandEn, setNewBrandEn] = useState('');
+  const [newBrandBusy, setNewBrandBusy] = useState(false);
+  const [newBrandErr, setNewBrandErr] = useState('');
+
+  useEffect(() => {
+    if (existing.data) {
+      const e = { ...existing.data };
+      e.show_public_price = !!e.show_public_price;
+      e.is_published = !!e.is_published;
+      e.is_featured = !!e.is_featured;
+      e.is_active = e.is_active === undefined ? true : !!e.is_active;
+      e.track_batch = !!e.track_batch;
+      e.track_expiry = !!e.track_expiry;
+      e.is_pesticide = !!e.is_pesticide;
+      setP({ ...PRODUCT_DEFAULT, ...e });
+    }
+  }, [existing.data]);
   const set = (k: string, v: any) => { setP((x: any) => ({ ...x, [k]: v })); setSaved(false); };
+
+  const handleAddBrand = async () => {
+    const ur = newBrandUr.trim() || newBrandEn.trim() || 'نیا برانڈ';
+    const en = newBrandEn.trim() || ur;
+    setNewBrandBusy(true); setNewBrandErr('');
+    try {
+      const res = await api<any>('/api/v1/brands', {
+        method: 'POST',
+        body: { name_ur: ur, name_en: en, is_active: true }
+      });
+      await brands.refetch();
+      set('brand_id', res.id);
+      toast(lang === 'ur' ? 'نیا برانڈ شامل ہو گیا' : 'Brand added successfully');
+      setShowBrandModal(false);
+      setNewBrandUr(''); setNewBrandEn('');
+    } catch (e: any) {
+      setNewBrandErr(e.message_ur ?? e.message ?? String(e));
+    } finally {
+      setNewBrandBusy(false);
+    }
+  };
+
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      const body: any = { ...p };
-      if (!body.name_ur || !body.category_id || !body.base_unit || !body.purchase_unit || !body.sale_unit || body.conversion_ratio_milli <= 0) {
-        throw new Error(lang === 'ur' ? 'نام، زمرہ، یونٹس اور کنورژن لازمی ہیں' : 'Name, category, units and conversion ratio are required');
-      }
+      let nameUr = p.name_ur ? String(p.name_ur).trim() : '';
+      let nameEn = p.name_en ? String(p.name_en).trim() : '';
+      if (!nameUr && nameEn) nameUr = nameEn;
+      if (!nameEn && nameUr) nameEn = nameUr;
+      if (!nameUr) nameUr = lang === 'ur' ? 'نئی مصنوعات' : 'New Product';
+
+      let catId = p.category_id && String(p.category_id).trim() ? String(p.category_id).trim() : '';
+      if (!catId && cats.data?.length) catId = cats.data[0].id;
+
+      const brandIdVal = p.brand_id && String(p.brand_id).trim() && String(p.brand_id).trim() !== '—'
+        ? String(p.brand_id).trim()
+        : null;
+
+      const body: any = {
+        name_ur: nameUr,
+        name_en: nameEn,
+        category_id: catId,
+        brand_id: brandIdVal,
+        slug: p.slug && String(p.slug).trim() ? String(p.slug).trim() : undefined,
+        base_unit: p.base_unit ? String(p.base_unit).trim() : 'kg',
+        purchase_unit: p.purchase_unit ? String(p.purchase_unit).trim() : (p.base_unit || 'kg'),
+        sale_unit: p.sale_unit ? String(p.sale_unit).trim() : (p.base_unit || 'kg'),
+        sku: p.sku ? String(p.sku).trim() : '',
+        barcode: p.barcode ? String(p.barcode).trim() : '',
+        description_ur: p.description_ur || '',
+        description_en: p.description_en || '',
+        seo_title: p.seo_title || '',
+        seo_description: p.seo_description || '',
+        conversion_ratio_milli: Number(p.conversion_ratio_milli) > 0 ? Number(p.conversion_ratio_milli) : 1000,
+        grams_per_base_unit: Number(p.grams_per_base_unit) || 0,
+        purchase_rate_paisa: Number(p.purchase_rate_paisa) || 0,
+        sale_rate_paisa: Number(p.sale_rate_paisa) || 0,
+        public_price_paisa: Number(p.public_price_paisa) || 0,
+        tax_pct_milli: Number(p.tax_pct_milli) || 0,
+        reorder_level_milli: Number(p.reorder_level_milli) || 0,
+        track_batch: !!p.track_batch || !!p.is_pesticide,
+        track_expiry: !!p.track_expiry || !!p.is_pesticide,
+        is_pesticide: !!p.is_pesticide,
+        show_public_price: !!p.show_public_price,
+        is_published: !!p.is_published,
+        is_featured: !!p.is_featured,
+        is_active: p.is_active === undefined ? true : !!p.is_active,
+        availability_mode: p.availability_mode || 'AUTO',
+        season: p.season || 'NONE',
+      };
       if (id) await api(`/api/v1/products/${id}`, { method: 'PUT', body });
       else await api('/api/v1/products', { method: 'POST', body });
       toast(lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved successfully'); setSaved(true); nav('/erp/products');
@@ -270,12 +351,29 @@ export function ProductForm() {
     <Tabs tabs={tabs} active={tab} onChange={setTab} />
     <div className="card">
       {tab === 'basic' && <div className="grid g2">
-        <TextField label={lang === 'ur' ? 'نام (اردو)' : 'Name (Urdu)'} value={p.name_ur} onChange={(v) => set('name_ur', v)} required />
+        <TextField label={lang === 'ur' ? 'نام (اردو)' : 'Name (Urdu)'} value={p.name_ur} onChange={(v) => set('name_ur', v)} />
         <TextField label={lang === 'ur' ? 'نام (English)' : 'Name (English)'} value={p.name_en} onChange={(v) => set('name_en', v)} dir="ltr" />
-        <SelectField label={lang === 'ur' ? 'زمرہ' : 'Category'} value={p.category_id} onChange={(v) => set('category_id', v)} required placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Category'}
+        <SelectField label={lang === 'ur' ? 'زمرہ' : 'Category'} value={p.category_id} onChange={(v) => set('category_id', v)} placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Category'}
           options={(cats.data ?? []).map((c: any) => ({ value: c.id, label: `${lang === 'ur' ? c.name_ur : (c.name_en || c.name_ur)} (${c.code})` }))} />
-        <SelectField label={lang === 'ur' ? 'برانڈ' : 'Brand'} value={p.brand_id ?? ''} onChange={(v) => set('brand_id', v || null)} placeholder="—"
-          options={(brands.data ?? []).map((b: any) => ({ value: b.id, label: lang === 'ur' ? b.name_ur : (b.name_en || b.name_ur) }))} />
+        <div className="field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <label style={{ margin: 0 }}>{lang === 'ur' ? 'برانڈ' : 'Brand'}</label>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', minHeight: 'unset' }}
+              onClick={() => { setNewBrandUr(''); setNewBrandEn(''); setNewBrandErr(''); setShowBrandModal(true); }}
+            >
+              + {lang === 'ur' ? 'نیا برانڈ' : 'New Brand'}
+            </button>
+          </div>
+          <select className="input" value={p.brand_id ?? ''} onChange={(e) => set('brand_id', e.target.value || null)}>
+            <option value="">—</option>
+            {(brands.data ?? []).map((b: any) => (
+              <option key={b.id} value={b.id}>{lang === 'ur' ? b.name_ur : (b.name_en || b.name_ur)}</option>
+            ))}
+          </select>
+        </div>
         <TextField label="SKU" value={p.sku} onChange={(v) => set('sku', v)} />
         <TextField label={lang === 'ur' ? 'بار کوڈ' : 'Barcode'} value={p.barcode} onChange={(v) => set('barcode', v)} />
         <TextField label="Slug" value={p.slug} onChange={(v) => set('slug', v)} dir="ltr" helper={lang === 'ur' ? 'خالی چھوڑیں تو نام سے بنے گا' : 'Leave empty to auto-generate from name'} />
@@ -292,9 +390,9 @@ export function ProductForm() {
         <div className="notice small">{lang === 'ur' ? 'عوامی API کبھی لاگت، مارجن، سپلائر یا اندرونی نوٹ نہیں بھیجتا (H6)۔' : 'Public API never leaks purchase cost, margins, suppliers, or internal notes (H6).'}</div>
       </div>}
       {tab === 'stock' && <div className="grid g2">
-        <TextField label={lang === 'ur' ? 'بنیادی یونٹ' : 'Base Unit'} value={p.base_unit} onChange={(v) => set('base_unit', v)} required />
-        <TextField label={lang === 'ur' ? 'خرید یونٹ' : 'Purchase Unit'} value={p.purchase_unit} onChange={(v) => set('purchase_unit', v)} required />
-        <TextField label={lang === 'ur' ? 'فروخت یونٹ' : 'Sale Unit'} value={p.sale_unit} onChange={(v) => set('sale_unit', v)} required />
+        <TextField label={lang === 'ur' ? 'بنیادی یونٹ' : 'Base Unit'} value={p.base_unit} onChange={(v) => set('base_unit', v)} />
+        <TextField label={lang === 'ur' ? 'خرید یونٹ' : 'Purchase Unit'} value={p.purchase_unit} onChange={(v) => set('purchase_unit', v)} />
+        <TextField label={lang === 'ur' ? 'فروخت یونٹ' : 'Sale Unit'} value={p.sale_unit} onChange={(v) => set('sale_unit', v)} />
         <TextField label={lang === 'ur' ? 'تبدیلی (milli; 1000 = 1:1)' : 'Conversion Ratio (milli; 1000 = 1:1)'} value={fromMilli(p.conversion_ratio_milli)} onChange={(v) => { try { set('conversion_ratio_milli', toMilli(v)); } catch { /* ignore */ } }} />
         <QtyField label={lang === 'ur' ? 'کم اسٹاک حد' : 'Reorder Alert Level'} milli={p.reorder_level_milli} onChange={(v) => set('reorder_level_milli', v)} />
         <CheckField label={lang === 'ur' ? 'بیچ ٹریکنگ' : 'Batch Tracking'} checked={p.track_batch} onChange={(v) => set('track_batch', v)} />
@@ -334,6 +432,17 @@ export function ProductForm() {
         {saved && <Chip tone="success">{lang === 'ur' ? 'محفوظ' : 'Saved'}</Chip>}
       </div>
     </div>
+    <Sheet open={showBrandModal} onClose={() => setShowBrandModal(false)} title={lang === 'ur' ? 'نیا برانڈ شامل کریں' : 'Add New Brand'}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TextField label={lang === 'ur' ? 'برانڈ کا نام (اردو)' : 'Brand Name (Urdu)'} value={newBrandUr} onChange={setNewBrandUr} />
+        <TextField label={lang === 'ur' ? 'برانڈ کا نام (English)' : 'Brand Name (English)'} value={newBrandEn} onChange={setNewBrandEn} dir="ltr" />
+        {newBrandErr && <div className="err" role="alert"><Mark kind="warn" /> {newBrandErr}</div>}
+        <div className="btn-row" style={{ marginTop: 10 }}>
+          <Button onClick={handleAddBrand} loading={newBrandBusy} disabled={!newBrandUr.trim() && !newBrandEn.trim()}>{lang === 'ur' ? 'شامل کریں' : 'Add Brand'}</Button>
+          <Button variant="secondary" onClick={() => setShowBrandModal(false)}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
+        </div>
+      </div>
+    </Sheet>
   </div>;
 }
 

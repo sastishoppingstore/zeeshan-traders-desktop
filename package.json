@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.cjs",
   "description": "Zeeshan Traders (ذیشان ٹریڈرز) — public Urdu catalogue + fertilizer-centre ERP/Khata on Cloudflare Workers + D1 + R2",
   "workspaces": [
     "packages/*",
@@ -11,6 +12,10 @@
   "scripts": {
     "dev": "npm run build:web && tsx apps/worker/src/server/node-server.ts",
     "build:web": "vite build --config apps/web/vite.config.ts",
+    "build:desktop": "cross-env BUILD_TARGET=desktop vite build --config apps/web/vite.config.ts",
+    "dev:desktop": "npm run build:desktop && cross-env NODE_ENV=development DESKTOP_API_URL=http://localhost:3000 VITE_DESKTOP_API_URL=http://localhost:3000 electron .",
+    "dist:win": "npm run build:desktop && electron-builder --win nsis --x64",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "build:images": "node scripts/build-images.mjs",
     "preview": "npm run build:web && tsx apps/worker/src/server/node-server.ts",
     "server": "tsx apps/worker/src/server/node-server.ts",
@@ -44,6 +49,7 @@
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.3",
     "@tanstack/react-query": "^5.90.0",
+    "better-sqlite3": "^13.0.3",
     "dexie": "^4.2.0",
     "hono": "^4.10.0",
     "react": "^18.3.1",
@@ -52,12 +58,16 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
     "@sparticuz/chromium": "^153.0.0",
     "@types/node": "^22.18.0",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
     "axe-core": "^4.14.0",
+    "cross-env": "^10.1.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "lighthouse": "^13.6.0",
     "pixelmatch": "^8.0.0",
     "playwright-core": "^1.64.1",
@@ -68,10 +78,67 @@
     "vitest": "^3.2.4",
     "wrangler": "^4.45.0"
   },
+  "build": {
+    "appId": "com.zeeshantraders.desktop",
+    "productName": "Zeeshan Traders",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "migrations/*.sql",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/better-sqlite3/**"
+    ],
+    "npmRebuild": true,
+    "publish": null,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "apps/web/public/icons/icon-512.png",
+      "artifactName": "ZeeshanTraders-${version}-win-${arch}.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Zeeshan Traders",
+      "uninstallDisplayName": "Zeeshan Traders ${version}",
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": false
+    }
+  },
+  "electronBuilderSigningPlaceholder": {
+    "_note": "Code signing is intentionally OFF (no cert, no secrets in Git). To enable: move the keys below into package.json > build.win.signtoolOptions — electron-builder v26 rejects win.certificateFile at the win level and its config schema forbids unknown/comment keys, so this inert field is the disabled placeholder. Supply the certificate out of band via CSC_LINK/CSC_KEY_PASSWORD (or a Windows store subject name); never commit a .pfx or a password.",
+    "signtoolOptions": {
+      "certificateFile": "REPLACE_WITH_PATH_TO_PFX",
+      "certificateSubjectName": "CN=Zeeshan Traders",
+      "publisherName": "Zeeshan Traders"
+    }
+  },
   "engines": {
     "node": ">=22"
   },
   "allowScripts": {
+    "electron": true,
+    "better-sqlite3": true,
     "workerd@1.20251011.0": true,
     "esbuild@0.28.2": true,
     "esbuild@0.25.12": true,

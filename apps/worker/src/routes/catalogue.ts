@@ -6,7 +6,7 @@ import {
   cacheRead, cacheWrite, purgePublicCache, verifyTurnstile, rateLimit, clientIp, BizError, requirePerm,
 } from '../context.js';
 import type { DB } from '../db.js';
-import { productSchema, categorySchema, brandSchema, importSchema, enquirySchema,
+import { productSchema, productUpdateSchema, categorySchema, brandSchema, importSchema, enquirySchema,
   ulid, BUSINESS_PROFILE, toMilli, rupeesToPaisa } from '@zt/shared';
 import { getMedia, putMedia } from '../services/media.js';
 
@@ -43,11 +43,13 @@ function publicProduct(row: any, images: any[] = []) {
   };
 }
 
+// `deleted=0` lives in the FROM rather than in each caller's WHERE: every public read of the
+// catalogue goes through this select, and a soft-deleted product must be invisible to all of them.
 const PUBLIC_SELECT = `SELECT p.*, c.name_ur AS category_ur, c.name_en AS category_en, c.slug AS category_slug,
   b.name_ur AS brand_ur, b.name_en AS brand_en,
   (SELECT COALESCE(SUM(sb.qty_milli),0) FROM stock_balance sb WHERE sb.product_id=p.id) AS stock_milli
-  FROM products p JOIN product_categories c ON c.id=p.category_id
-  LEFT JOIN brands b ON b.id=p.brand_id`;
+  FROM (SELECT * FROM products WHERE deleted=0) p JOIN product_categories c ON c.id=p.category_id AND c.deleted=0
+  LEFT JOIN brands b ON b.id=p.brand_id AND b.deleted=0`;
 
 function slugify(name: string): string {
   const base = name.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
@@ -83,8 +85,8 @@ export function registerCatalogue(app: H) {
     const hours = await getSetting(db, 'opening_hours');
     const tagline = await getSetting<string>(db, 'hero_tagline');
     const categories = await db.prepare(`SELECT cat.id,cat.code,cat.name_ur,cat.name_en,cat.slug,cat.icon,
-      (SELECT COUNT(*) FROM products p WHERE p.category_id=cat.id AND p.is_published=1 AND p.is_active=1) AS product_count
-      FROM product_categories cat WHERE cat.is_active=1 ORDER BY cat.sort LIMIT 30`).all();
+      (SELECT COUNT(*) FROM products p WHERE p.category_id=cat.id AND p.deleted=0 AND p.is_published=1 AND p.is_active=1) AS product_count
+      FROM product_categories cat WHERE cat.is_active=1 AND cat.deleted=0 ORDER BY cat.sort LIMIT 30`).all();
     // The home shelf shows sixteen items, so featured alone has to be able to fill it.
     const featured = await db.prepare(`${PUBLIC_SELECT} WHERE p.is_published=1 AND p.is_active=1 AND p.is_featured=1 ORDER BY p.created_at DESC LIMIT 16`).all();
     const latest = await db.prepare(`${PUBLIC_SELECT} WHERE p.is_published=1 AND p.is_active=1 ORDER BY p.created_at DESC LIMIT 16`).all();
@@ -96,7 +98,7 @@ export function registerCatalogue(app: H) {
       business: publicBusiness, opening_hours: hours ?? null, hero_tagline: tagline ?? '',
       categories, featured: featured.map((p) => publicProduct(p)), new_arrivals: latest.map((p) => publicProduct(p)),
       banners, announcements,
-      catalogue_empty: (await db.prepare('SELECT COUNT(*) n FROM products WHERE is_published=1 AND is_active=1').first<{ n: number }>())?.n === 0,
+      catalogue_empty: (await db.prepare('SELECT COUNT(*) n FROM products WHERE deleted=0 AND is_published=1 AND is_active=1').first<{ n: number }>())?.n === 0,
     };
     const body = JSON.stringify({ ok: true, data });
     await cacheWrite(c, 'home', body, 180);
@@ -107,8 +109,8 @@ export function registerCatalogue(app: H) {
   app.get('/api/v1/public/categories', (c) => handle(c, async () => {
     const db = c.get('db')!;
     const rows = await db.prepare(`SELECT cat.id,cat.code,cat.parent_id,cat.name_ur,cat.name_en,cat.slug,cat.icon,
-      (SELECT COUNT(*) FROM products p WHERE p.category_id=cat.id AND p.is_published=1 AND p.is_active=1) AS product_count
-      FROM product_categories cat WHERE cat.is_active=1 ORDER BY cat.sort LIMIT 50`).all();
+      (SELECT COUNT(*) FROM products p WHERE p.category_id=cat.id AND p.deleted=0 AND p.is_published=1 AND p.is_active=1) AS product_count
+      FROM product_categories cat WHERE cat.is_active=1 AND cat.deleted=0 ORDER BY cat.sort LIMIT 50`).all();
     return ok(c, rows);
   }));
 
@@ -224,7 +226,7 @@ export function registerCatalogue(app: H) {
     const q = (c.req.query('q') ?? '').trim();
     const category = c.req.query('category') ?? '';
     const cursor = c.req.query('cursor') ?? '';
-    const where = ['1=1']; const args: (string | number)[] = [];
+    const where = ['p.deleted=0']; const args: (string | number)[] = [];
     if (q) { where.push('(p.name_ur LIKE ? OR p.name_en LIKE ? OR p.sku LIKE ?)'); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
     if (category) { where.push('p.category_id=?'); args.push(category); }
     if (c.req.query('active') === '0') where.push('p.is_active=0');
@@ -251,17 +253,33 @@ export function registerCatalogue(app: H) {
     const row = await db.prepare(`${PUBLIC_SELECT} WHERE p.id=?`).bind(c.req.param('id')).first<any>();
     if (!row) return fail(c, 404, 'NOT_FOUND', 'مصنوعات نہیں ملی', 'Product not found');
     const images = await db.prepare('SELECT * FROM product_images WHERE product_id=? ORDER BY sort').bind(row.id).all();
-    const batches = await db.prepare('SELECT * FROM product_batches WHERE product_id=? ORDER BY expiry_date').bind(row.id).all();
+    const batches = await db.prepare('SELECT * FROM product_batches WHERE product_id=? AND deleted=0 ORDER BY expiry_date').bind(row.id).all();
     return ok(c, { ...row, images, batches });
   }));
 
   app.post('/api/v1/products', requirePerm('products.write'), (c) => handle(c, async () => {
     const body = productSchema.parse(await c.req.json());
     const db = c.get('db')!;
-    const cat = await db.prepare('SELECT id,book_code FROM product_categories WHERE id=?').bind(body.category_id).first<any>();
-    if (!cat) throw new BizError(400, 'CATEGORY_NOT_FOUND', 'زمرہ نہیں ملا', 'Category not found');
-    if (body.is_pesticide && (!body.track_batch || !body.track_expiry)) {
-      throw new BizError(400, 'PESTICIDE_TRACKING', 'پیسٹی سائیڈ کے لیے بیچ اور ایکسپائری ٹریکنگ لازمی ہے', 'Batch and expiry tracking are mandatory for pesticides');
+    let cat = body.category_id
+      ? await db.prepare('SELECT id,book_code FROM product_categories WHERE (id=? OR code=? OR slug=?) AND deleted=0')
+          .bind(body.category_id, body.category_id, body.category_id).first<any>()
+      : null;
+    if (!cat) {
+      cat = await db.prepare('SELECT id,book_code FROM product_categories WHERE deleted=0 ORDER BY sort LIMIT 1').first<any>();
+    }
+    if (!cat) {
+      const defaultCatId = 'cat-general';
+      const at = nowIso();
+      await db.prepare(`INSERT OR IGNORE INTO product_categories (id,code,parent_id,name_ur,name_en,slug,book_code,icon,sort,is_active,is_system,created_at,updated_at,version)
+        VALUES (?,'GEN',null,'عام','General','general','GEN','',0,1,1,?,?,1)`).bind(defaultCatId, at, at).run();
+      cat = { id: defaultCatId, book_code: 'GEN' };
+    }
+    const resolvedCatId = cat.id;
+    let track_batch = body.track_batch;
+    let track_expiry = body.track_expiry;
+    if (body.is_pesticide) {
+      track_batch = true;
+      track_expiry = true;
     }
     const slug = await uniqueSlug(db, body.slug || body.name_ur);
     const id = ulid(); const at = nowIso();
@@ -269,15 +287,15 @@ export function registerCatalogue(app: H) {
       'base_unit','purchase_unit','sale_unit','conversion_ratio_milli','grams_per_base_unit','track_batch','track_expiry',
       'is_pesticide','reorder_level_milli','purchase_rate_paisa','sale_rate_paisa','tax_pct_milli','show_public_price',
       'public_price_paisa','availability_mode','is_published','is_featured','is_active','seo_title','seo_description','season',
-      'created_at','created_by','updated_at','version'];
-    const vals = [id, body.name_ur, body.name_en, slug, body.category_id, body.brand_id ?? null, body.sku, body.barcode,
+      'created_at','created_by','updated_at','version','deleted'];
+    const vals = [id, body.name_ur, body.name_en, slug, resolvedCatId, body.brand_id ?? null, body.sku, body.barcode,
       sanitizeHtml(body.description_ur), sanitizeHtml(body.description_en),
       body.base_unit, body.purchase_unit, body.sale_unit, body.conversion_ratio_milli, body.grams_per_base_unit,
-      body.track_batch ? 1 : 0, body.track_expiry ? 1 : 0, body.is_pesticide ? 1 : 0,
+      track_batch ? 1 : 0, track_expiry ? 1 : 0, body.is_pesticide ? 1 : 0,
       body.reorder_level_milli, body.purchase_rate_paisa, body.sale_rate_paisa, body.tax_pct_milli,
       body.show_public_price ? 1 : 0, body.public_price_paisa, body.availability_mode,
       body.is_published ? 1 : 0, body.is_featured ? 1 : 0, body.is_active ? 1 : 0,
-      body.seo_title, body.seo_description, body.season, at, me(c).id, at, 1];
+      body.seo_title, body.seo_description, body.season, at, me(c).id, at, 1, 0];
     try {
       await db.prepare(`INSERT INTO products (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`).bind(...vals).run();
     } catch (e: any) {
@@ -290,17 +308,31 @@ export function registerCatalogue(app: H) {
   }));
 
   app.put('/api/v1/products/:id', requirePerm('products.write'), (c) => handle(c, async () => {
-    const body = productSchema.partial().parse(await c.req.json());
+    const body = productUpdateSchema.parse(await c.req.json());
     const db = c.get('db')!;
     const id = c.req.param('id');
     const before = await db.prepare('SELECT * FROM products WHERE id=?').bind(id).first<any>();
     if (!before) return fail(c, 404, 'NOT_FOUND', 'مصنوعات نہیں ملی', 'Product not found');
+    const ALLOWED_UPDATE_COLS = new Set([
+      'name_ur', 'name_en', 'category_id', 'brand_id', 'sku', 'barcode',
+      'description_ur', 'description_en', 'base_unit', 'purchase_unit', 'sale_unit',
+      'conversion_ratio_milli', 'grams_per_base_unit', 'track_batch', 'track_expiry',
+      'is_pesticide', 'reorder_level_milli', 'purchase_rate_paisa', 'sale_rate_paisa',
+      'tax_pct_milli', 'show_public_price', 'public_price_paisa', 'availability_mode',
+      'is_published', 'is_featured', 'is_active', 'seo_title', 'seo_description', 'season'
+    ]);
     const boolCols = new Set(['track_batch','track_expiry','is_pesticide','show_public_price','is_published','is_featured','is_active']);
     const sets: string[] = []; const args: unknown[] = [];
     for (const [k, val] of Object.entries(body)) {
       if (k === 'slug') continue;
+      if (!ALLOWED_UPDATE_COLS.has(k)) continue;
+      if (k === 'category_id' && (!val || !String(val).trim())) continue;
       sets.push(`${k}=?`);
-      args.push(k === 'description_ur' || k === 'description_en' ? sanitizeHtml(String(val)) : boolCols.has(k) ? (val ? 1 : 0) : val);
+      let cleanVal: unknown = val;
+      if (k === 'description_ur' || k === 'description_en') cleanVal = sanitizeHtml(String(val ?? ''));
+      else if (boolCols.has(k)) cleanVal = val ? 1 : 0;
+      else if (k === 'brand_id') cleanVal = (!val || val === '—') ? null : val;
+      args.push(cleanVal);
     }
     if (body.slug) { const s = await uniqueSlug(db, body.slug, id); sets.push('slug=?'); args.push(s); }
     sets.push('updated_at=?', 'version=version+1'); args.push(nowIso());
@@ -415,8 +447,8 @@ export function registerCatalogue(app: H) {
 
   // --------------------------- categories / brands ----------------------------
   app.get('/api/v1/categories', requirePerm('catalogue.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM product_categories ORDER BY sort,name_ur LIMIT 100').all())));
-  app.post('/api/v1/categories', requirePerm('catalogue.write'), (c) => handle(c, async () => {
+    ok(c, await c.get('db')!.prepare('SELECT * FROM product_categories WHERE deleted=0 ORDER BY sort,name_ur LIMIT 100').all())));
+  app.post('/api/v1/categories', requirePerm('catalogue.write', 'products.write'), (c) => handle(c, async () => {
     const body = categorySchema.parse(await c.req.json());
     const db = c.get('db')!; const id = ulid(); const at = nowIso();
     await db.prepare(`INSERT INTO product_categories (id,code,parent_id,name_ur,name_en,slug,book_code,icon,sort,is_active,is_system,created_at,updated_at,version)
@@ -441,8 +473,8 @@ export function registerCatalogue(app: H) {
     return ok(c, { id: c.req.param('id') });
   }));
   app.get('/api/v1/brands', requirePerm('catalogue.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM brands ORDER BY name_ur LIMIT 200').all())));
-  app.post('/api/v1/brands', requirePerm('catalogue.write'), (c) => handle(c, async () => {
+    ok(c, await c.get('db')!.prepare('SELECT * FROM brands WHERE deleted=0 ORDER BY name_ur LIMIT 200').all())));
+  app.post('/api/v1/brands', requirePerm('catalogue.write', 'products.write'), (c) => handle(c, async () => {
     const body = brandSchema.parse(await c.req.json());
     const db = c.get('db')!; const id = ulid();
     await db.prepare('INSERT INTO brands (id,name_ur,name_en,is_active,created_at,updated_at,version) VALUES (?,?,?,?,?,?,1)')
@@ -450,13 +482,14 @@ export function registerCatalogue(app: H) {
     return ok(c, { id }, 201);
   }));
   app.get('/api/v1/units', requirePerm('catalogue.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM unit_conversions ORDER BY from_unit LIMIT 200').all())));
+    ok(c, await c.get('db')!.prepare('SELECT * FROM unit_conversions WHERE deleted=0 ORDER BY from_unit LIMIT 200').all())));
   app.post('/api/v1/units', requirePerm('catalogue.write'), (c) => handle(c, async () => {
     const body = await c.req.json() as { from_unit: string; to_unit: string; ratio_milli: number; confirmed?: boolean };
     const db = c.get('db')!;
-    await db.prepare(`INSERT INTO unit_conversions (id,from_unit,to_unit,ratio_milli,confirmed,created_at)
-      VALUES (?,?,?,?,?,?) ON CONFLICT(from_unit,to_unit) DO UPDATE SET ratio_milli=excluded.ratio_milli, confirmed=excluded.confirmed`)
-      .bind(ulid(), body.from_unit, body.to_unit, body.ratio_milli, body.confirmed ? 1 : 0, nowIso()).run();
+    await db.prepare(`INSERT INTO unit_conversions (id,from_unit,to_unit,ratio_milli,confirmed,created_at,updated_at,version)
+      VALUES (?,?,?,?,?,?,?,1) ON CONFLICT(from_unit,to_unit) DO UPDATE SET ratio_milli=excluded.ratio_milli,
+        confirmed=excluded.confirmed, updated_at=excluded.updated_at, version=unit_conversions.version+1`)
+      .bind(ulid(), body.from_unit, body.to_unit, body.ratio_milli, body.confirmed ? 1 : 0, nowIso(), nowIso()).run();
     return ok(c, { ok: true }, 201);
   }));
 

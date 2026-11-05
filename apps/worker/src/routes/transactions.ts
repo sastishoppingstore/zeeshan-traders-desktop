@@ -118,7 +118,7 @@ export function registerTransactions(app: H) {
     const db = c.get('db')!;
     const type = c.req.query('type');
     const q = (c.req.query('q') ?? '').trim();
-    const where = ['p.is_active=1']; const args: (string | number)[] = [];
+    const where = ['p.is_active=1', 'p.deleted=0']; const args: (string | number)[] = [];
     if (type) { where.push('p.type=?'); args.push(type); }
     if (q) { where.push('(p.name_ur LIKE ? OR p.phone LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
     const rows = await db.prepare(`SELECT p.*,COALESCE(pb.balance_paisa,0) AS balance_paisa
@@ -163,7 +163,8 @@ export function registerTransactions(app: H) {
         WHERE t.account_id=fa.id AND t.date>=date('now','start of month')) AS month_in,
       (SELECT COALESCE(SUM(CASE WHEN direction='OUT' THEN amount_paisa ELSE 0 END),0) FROM account_transactions t
         WHERE t.account_id=fa.id AND t.date>=date('now','start of month')) AS month_out
-      FROM financial_accounts fa LEFT JOIN account_balance ab ON ab.account_id=fa.id ORDER BY fa.code`).all();
+      FROM financial_accounts fa LEFT JOIN account_balance ab ON ab.account_id=fa.id
+      WHERE fa.deleted=0 ORDER BY fa.code`).all();
     return ok(c, rows);
   }));
   app.get('/api/v1/accounts/:id', requirePerm('accounts.read'), (c) => handle(c, async () => {
@@ -203,9 +204,9 @@ export function registerTransactions(app: H) {
     return ok(c, rows);
   }));
   app.get('/api/v1/expense-categories', requirePerm('expenses.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM expense_categories ORDER BY name_ur').all())));
+    ok(c, await c.get('db')!.prepare('SELECT * FROM expense_categories WHERE deleted=0 ORDER BY name_ur').all())));
   app.get('/api/v1/employees', requirePerm('employees.read'), (c) => handle(c, async () =>
-    ok(c, await c.get('db')!.prepare('SELECT * FROM employees ORDER BY name').all())));
+    ok(c, await c.get('db')!.prepare('SELECT * FROM employees WHERE deleted=0 ORDER BY name').all())));
   app.post('/api/v1/employees', requirePerm('employees.write'), (c) => handle(c, async () => {
     const input = employeeSchema.parse(await c.req.json());
     const db = c.get('db')!; const id = ulid();
