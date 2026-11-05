@@ -148,7 +148,7 @@ export function PinGate() {
           catch { setErr('کھولنے میں خرابی'); } finally { setBusy(false); }
         }}>{busy ? 'چابی بن رہی ہے…' : 'کھولیں'}</button>
       <div className="notice small" style={{ marginBlockStart: 14 }}>PIN بھول گئے؟ مقفل کیش صاف کی جا سکتی ہے؛
-        سرور کا ڈیٹا محفوظ رہتا ہے اور سنک کی قطار متاثر نہیں ہوتی۔</div>
+        آن لائن ڈیٹا محفوظ رہتا ہے اور سنک کی قطار متاثر نہیں ہوتی۔</div>
       {!confirmWipe ? <button className="btn btn-ghost btn-sm" onClick={() => setConfirmWipe(true)}>کیش صاف کریں</button> :
         <button className="btn btn-danger btn-sm" onClick={async () => { await wipeEncryptedCache(); }}>تصدیق: کیش مٹائیں</button>}
     </div>

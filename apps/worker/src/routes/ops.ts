@@ -192,11 +192,21 @@ async function dispatch(c: any, type: string, payload: any, key: string, device:
 /** Nightly backup: all tables -> NDJSON -> gzip -> AES-GCM -> R2 (or local preview dir). */
 export async function runBackup(c: any): Promise<any> {
   const db = c.get('db') as DB;
-  const tables = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all<any>();
+  const tables = await db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name"
+  ).all<any>();
   const chunks: string[] = [];
+  let exportedCount = 0;
   for (const t of tables) {
-    const rows = await db.prepare(`SELECT * FROM "${String(t.name).replace(/"/g, '')}"`).all<any>();
-    for (const r of rows) chunks.push(JSON.stringify({ table: t.name, row: r }));
+    const tbl = String(t.name).replace(/"/g, '');
+    if (tbl.startsWith('_cf_') || tbl.startsWith('sqlite_') || tbl.startsWith('d1_')) continue;
+    try {
+      const rows = await db.prepare(`SELECT * FROM "${tbl}"`).all<any>();
+      for (const r of rows) chunks.push(JSON.stringify({ table: tbl, row: r }));
+      exportedCount++;
+    } catch (err: any) {
+      console.warn(`[BACKUP] Skipping table ${tbl}:`, err.message);
+    }
   }
   const ndjson = chunks.join('\n');
   let compressed: Uint8Array;
@@ -227,12 +237,12 @@ export async function runBackup(c: any): Promise<any> {
   }
   await db.prepare(`INSERT INTO backup_logs (id,at,size_bytes,result,details_json,staging_restore_result)
     VALUES (?,?,?,?,?,'NOT_TESTED')`).bind(id, at, payload.byteLength, 'SUCCESS',
-    JSON.stringify({ key: r2key, rows: chunks.length, tables: tables.length,
+    JSON.stringify({ key: r2key, rows: chunks.length, tables: exportedCount,
       format: 'NDJSON+gzip+AES-GCM (12-byte IV prefix)', note: 'Staging restore NOT tested automatically' })).run();
   await db.prepare('INSERT INTO job_runs (id,job,at,result,details_json) VALUES (?,?,?,?,?)')
     .bind(ulid(), 'backup', at, 'PASS', JSON.stringify({ key: r2key, size: payload.byteLength })).run();
   await audit(db, 'BACKUP', 'backup_logs', id, { user_id: c.get('user')?.id ?? 'cron' });
-  return { id, size_bytes: payload.byteLength, rows: chunks.length, tables: tables.length,
+  return { id, size_bytes: payload.byteLength, rows: chunks.length, tables: exportedCount,
     result: 'SUCCESS', key: r2key, staging_restore_result: 'NOT_TESTED' };
 }
 

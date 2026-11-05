@@ -298,7 +298,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 // --------------------------------- Login -----------------------------------
 function Login() {
-  const { reloadSession, setupStatus, toast, t } = useApp();
+  const { reloadSession, setupStatus, toast, t, lang } = useApp();
   const nav = useNavigate();
   const [username, setUsername] = useState(''), [password, setPassword] = useState('');
   const [show, setShow] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState('');
@@ -341,7 +341,7 @@ function Login() {
             catch (e: any) { setErr(e.message_ur ?? String(e)); }
             finally { setPkBusy(false); }
           }}><Mark kind="key" /> فنگر پرنٹ سے لاگ ان</Button>
-        <p className="login-note">بائو میٹرک اسی ڈیوائس پر رہتا ہے — سرور تک کچھ نہیں جاتا۔</p>
+        <p className="login-note">{lang === 'ur' ? 'بایومیٹرک اسی موبائل یا کمپیوٹر پر محفوظ رہتا ہے۔' : 'Biometrics remain securely on this device.'}</p>
       </>}
     </form>
   </div>;

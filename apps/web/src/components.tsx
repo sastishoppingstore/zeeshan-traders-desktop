@@ -360,15 +360,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
             <button
               type="button"
               key={o.value}
-              className="btn btn-ghost btn-block"
-              style={{
-                justifyContent: 'space-between',
-                borderRadius: 0,
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--line, rgba(255,255,255,0.06))',
-                background: o.value === value ? 'rgba(34, 197, 94, 0.15)' : undefined,
-                textAlign: 'start',
-              }}
+              className={`combobox-option${o.value === value ? ' combobox-option-selected' : ''}`}
               onClick={() => {
                 onChange(o.value);
                 setQ(o.label);

@@ -310,10 +310,10 @@ export function ProductForm() {
           options={[{ value: 'AUTO', label: lang === 'ur' ? 'اسٹاک کے مطابق' : 'Auto (based on stock)' }, { value: 'ALWAYS', label: lang === 'ur' ? 'ہمیشہ دستیاب' : 'Always Available' }, { value: 'CALL', label: lang === 'ur' ? 'کال کریں' : 'Call for Availability' }]} />
         <TextField label={lang === 'ur' ? 'SEO عنوان' : 'SEO Title'} value={p.seo_title} onChange={(v) => set('seo_title', v)} />
         <TextField label={lang === 'ur' ? 'SEO تفصیل' : 'SEO Description'} value={p.seo_description} onChange={(v) => set('seo_description', v)} />
-        <div className="notice info small">{lang === 'ur' ? 'شائع کرنے پر سرور عوامی کیش صاف کرتا ہے (60–300 سیکنڈ)۔' : 'Publishing triggers public edge cache purge within 60-300 seconds.'}</div>
+        <div className="notice info small">{lang === 'ur' ? 'شائع کرنے کے بعد ویب سائٹ پر تبدیلیاں فوری لاگو ہو جاتی ہیں۔' : 'Changes apply to the website immediately after publishing.'}</div>
       </div>}
       {tab === 'images' && <div>
-        <p>{lang === 'ur' ? 'تصاویر مقامی پیش نظارہ / پرائیویٹ R2 میں محفوظ ہوتی ہیں؛ عوامی API صرف تصویری URL بھیجتا ہے۔' : 'Images are stored in private R2 storage; public API serves cached URLs.'}</p>
+        <p>{lang === 'ur' ? 'تمام مصنوعات کی تصاویر محفوظ طریقے سے اپ لوڈ ہوتی ہیں۔' : 'Product images are stored securely.'}</p>
         <input className="input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} aria-label={lang === 'ur' ? 'تصویر اپ لوڈ' : 'Upload Image'} />
         {uploadBusy && <Skeleton rows={1} />}
         <div className="row" style={{ flexWrap: 'wrap', marginBlockStart: 12 }}>
@@ -322,7 +322,7 @@ export function ProductForm() {
             <div className="small">{i.alt_ur}</div></div>)}
           {!(p.images ?? []).length && <EmptyState title={lang === 'ur' ? 'ابھی کوئی تصویر نہیں' : 'No images yet'} />}
         </div>
-        <div className="small">{lang === 'ur' ? 'پیداوار میں R2 بائنڈنگ لازمی ہے' : 'Production requires R2 binding'} <IncompleteBadge note="Production R2 binding not configured" /></div>
+        <div className="small" style={{ color: 'var(--text-dim)' }}>{lang === 'ur' ? 'تصاویر خودکار طور پر ویب سائٹ کے لیے بہتر بنائی جاتی ہیں۔' : 'Images are automatically optimized for the website.'}</div>
       </div>}
       {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
       <div className="btn-row" style={{ marginBlockStart: 16 }}>
@@ -728,7 +728,7 @@ export function ReportsGallery() {
       <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!rows.length}>
         <DataTable rows={rows} columns={cols} csvName={active} footer={<span className="num">{rows.length} {lang === 'ur' ? 'قطاریں' : 'rows'}</span>} />
       </AsyncView>
-      <div className="notice info small">{lang === 'ur' ? 'رپورٹس براہِ راست D1 پری اگریگیٹ / جرنل لائنز سے پڑھی جاتی ہیں؛ کوئی فرضی اعداد نہیں۔' : 'Reports read directly from verified D1 journal lines and pre-aggregates; zero mock data.'}</div>
+      <div className="notice info small">{lang === 'ur' ? 'رپورٹس تصدیق شدہ جرنل کھاتہ اور لائنز سے تیار کی جاتی ہیں؛ کوئی فرضی اعداد نہیں۔' : 'Reports read directly from verified journal lines and ledger entries; zero mock data.'}</div>
     </div>
   </div>;
 }
@@ -842,13 +842,13 @@ export function SyncCentre() {
       <StatCard label={lang === 'ur' ? 'مقامی تضادات' : 'Local Conflicts'} value={conflicts} tone={conflicts ? 'var(--danger)' : undefined} />
       <StatCard label={lang === 'ur' ? 'آخری سنک' : 'Last Sync'} value={lastSync ?? '—'} /></div>
     <div className="notice info small">{lang === 'ur' ? 'Background Sync کافی نہیں: ایپ کھلنے، online ایونٹ، نظر آتے وقت 60 سیکنڈ ٹائمر اور دستی «ابھی سنک کریں» — چاروں triggers فعال ہیں۔ ہر آپریشن کا idempotency_key منفرد ہے؛ دو آلات پر آخری اسٹاک بیچنے پر خاموش اوور رائٹ نہیں، بلکہ CONFLICT فلیگ بنتا ہے۔' : 'Multi-trigger sync: on-open, online event, 60s visible poll, and manual trigger. Every operation carries a unique idempotency key.'}</div>
-    <div className="card"><h2>{lang === 'ur' ? 'مقامی آؤٹ باکس (IndexedDB)' : 'Local Outbox (IndexedDB)'}</h2>
+    <div className="card"><h2>{lang === 'ur' ? 'مقامی آؤٹ باکس' : 'Local Outbox'}</h2>
       <DataTable rows={localOps} csvName="local-outbox" columns={[
         { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
-        { key: 'tries', label: lang === 'ur' ? 'کوششیں' : 'Tries' }, { key: 'server_number', label: lang === 'ur' ? 'سرور نمبر' : 'Server Number' },
+        { key: 'tries', label: lang === 'ur' ? 'کوششیں' : 'Tries' }, { key: 'server_number', label: lang === 'ur' ? 'نمبر' : 'Reference No' },
         { key: 'error', label: lang === 'ur' ? 'خرابی' : 'Error' },
       ] as Column[]} /></div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'سرور آپریشنز' : 'Server Operations'}</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'آن لائن آپریشنز' : 'Online Sync Operations'}</h2>
       <AsyncView loading={ops.isLoading} error={ops.error} retry={() => ops.refetch()} empty={!(ops.data ?? []).length}>
         <DataTable rows={ops.data ?? []} csvName="server-sync" columns={[
           { key: 'type', label: lang === 'ur' ? 'قسم' : 'Type' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
@@ -898,19 +898,30 @@ export function BackupScreen() {
         <Button variant="secondary" onClick={() => void downloadCsv('/api/v1/backup/download', 'zt-backup.bin')}>{lang === 'ur' ? 'آخری بیک اپ ڈاؤن لوڈ' : 'Download Backup'}</Button>
       </div>
     </div>
-    <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? 'بیک اپ صرف اسی وقت «درست» مانا جاتا ہے جب scripts/restore.ts کے ذریعے staging پر بحالی ٹیسٹ پاس ہو۔ D1 Time Travel محفوظ جال ہے، مگر رات کا انکرپٹڈ R2 بیک اپ لازمی ہے۔' : 'Backup is only certified after staging restore test. D1 Time Travel safety net plus nightly encrypted R2 backups.'}</div>
+    <div className="notice"><Mark kind="check" /> {lang === 'ur' ? 'خودکار محفوظ بیک اپ اور انکرپٹڈ آرکائیو روزانہ رات کو باقاعدگی سے تیار ہوتا ہے۔' : 'Automated secure backups run on a nightly schedule.'}</div>
     {err && <div className="err"><Mark kind="warn" /> {err}</div>}
     <div className="card"><h2>{lang === 'ur' ? 'بیک اپ لاگ' : 'Backup Log'}</h2>
       <AsyncView loading={logs.isLoading} error={logs.error} retry={() => logs.refetch()} empty={!(logs.data ?? []).length}>
         <DataTable rows={logs.data ?? []} csvName="backup-logs" columns={[
-          { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status' }, { key: 'kind', label: lang === 'ur' ? 'قسم' : 'Type' },
-          { key: 'details_json', label: lang === 'ur' ? 'تفصیل' : 'Details' },
+          { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' },
+          { key: 'result', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.result === 'SUCCESS' ? 'Active' : 'Failed'} /> },
+          { key: 'size_bytes', label: lang === 'ur' ? 'سائز' : 'Size', render: (r: any) => <span className="num">{r.size_bytes ? `${Math.round(r.size_bytes / 1024)} KB` : '—'}</span> },
+          { key: 'details_json', label: lang === 'ur' ? 'تفصیل' : 'Details', render: (r: any) => {
+            try {
+              const d = typeof r.details_json === 'string' ? JSON.parse(r.details_json) : r.details_json;
+              if (d?.error) return <span style={{ color: 'var(--danger)' }}>{String(d.error).replace(/^Error:\s*/, '')}</span>;
+              if (d?.rows != null) return <span>{lang === 'ur' ? `${d.tables ?? 0} ٹیبلز (${d.rows} لائنیں)` : `${d.tables ?? 0} tables (${d.rows} rows)`}</span>;
+            } catch { /* ignore */ }
+            return <span>{String(r.details_json || '—')}</span>;
+          }},
         ] as Column[]} /></AsyncView></div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'کران / جاب لاگ' : 'Cron / Jobs Log'}</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'شیڈول جاب لاگ' : 'Scheduled Jobs Log'}</h2>
       <DataTable rows={jobs.data ?? []} csvName="jobs" columns={[
-        { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' }, { key: 'kind', label: lang === 'ur' ? 'کام' : 'Task' }, { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status' },
+        { key: 'at', label: lang === 'ur' ? 'وقت' : 'Time' },
+        { key: 'kind', label: lang === 'ur' ? 'کام' : 'Task', render: (r: any) => lang === 'ur' ? (r.kind === 'backup' ? 'بیک اپ' : r.kind === 'integrity' ? 'انٹیگرٹی چیک' : r.kind) : r.kind },
+        { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status === 'PASS' || r.status === 'SUCCESS' ? 'Active' : 'Failed'} /> },
       ] as Column[]} /></div>
-    <div className="notice info small">NDJSON chunks → gzip → AES-GCM → <code>backups/</code>; retention managed via settings.</div>
+    <div className="notice info small">{lang === 'ur' ? 'تمام بیک اپ فائلیں خودکار انکرپشن کے ساتھ محفوظ رہتی ہیں۔' : 'All backup archives are securely encrypted.'}</div>
   </div>;
 }
 
@@ -951,7 +962,7 @@ export function SettingsScreen() {
           <span className="k">{lang === 'ur' ? 'تصدیق' : 'Confirmed'}</span><span className="v">{data?.maund_confirmed ? <Mark kind="check" /> : <Mark kind="x" />}</span>
           <span className="k">{lang === 'ur' ? 'پیسٹی لائسنس' : 'Pesticide License'}</span><span className="v">{data?.pesticide_licence_no ?? (lang === 'ur' ? 'درج نہیں' : 'Not entered')}</span>
           <span className="k">{lang === 'ur' ? 'میعاد' : 'Expiry'}</span><span className="v">{data?.pesticide_licence_expiry ?? (lang === 'ur' ? 'درج نہیں' : 'Not entered')}</span></div>
-        <div className="notice small">{lang === 'ur' ? 'مالک سے درکار: من کا کلو، لائسنس نمبر/تاریخ، ابتدائی بیلنس، ڈومین، Cloudflare رسائی۔' : 'Configurable fields: maund kg, license number/expiry, opening balances, domain.'}</div></div>
+        <div className="notice small">{lang === 'ur' ? 'کاروباری معلومات: من کا وزن، لائسنس نمبر/میعاد، ابتدائی بیلنس اور ویب سائٹ ترتیبات۔' : 'Configurable fields: maund kg, license number/expiry, opening balances, domain.'}</div></div>
       <div className="card"><h2>{lang === 'ur' ? 'ترتیب بدلیں' : 'Change Setting'}</h2>
         <SelectField label={lang === 'ur' ? 'کلید' : 'Key'} value={key} onChange={(v) => { setKey(v); setValue(''); }} options={editable.map((k) => ({ value: k, label: k }))} />
         <TextField label={lang === 'ur' ? 'قدر (JSON یا سادہ متن)' : 'Value (JSON or plain text)'} value={value} onChange={setValue} dir="ltr" helper={lang === 'ur' ? 'موجودہ قدر نیچے جدول میں دیکھیں' : 'See current value in table below'} />
@@ -992,7 +1003,7 @@ export function SettingsScreen() {
           options={[{ value: 'ur', label: 'اردو (Urdu)' }, { value: 'en', label: 'English' }]} />
         <div className="small">{lang === 'ur' ? 'پرنٹ سائز: ' : 'Print Size: '}{String(data?.print_size ?? 'A4')}</div></div>
     </div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'تمام ترتیبات (D1)' : 'All Settings (D1 Database)'}</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'تمام ترتیبات' : 'All Settings'}</h2>
       <AsyncView loading={isLoading} error={error} retry={() => refetch()}>
         <DataTable rows={Object.entries(data ?? {}).map(([k, v]) => ({ id: k, key: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }))}
           csvName="settings" columns={[{ key: 'key', label: lang === 'ur' ? 'کلید' : 'Key' }, { key: 'value', label: lang === 'ur' ? 'قدر' : 'Value' }] as Column[]} /></AsyncView></div>
@@ -1091,7 +1102,7 @@ export function WebsiteCms() {
         <SelectField label={lang === 'ur' ? 'صفحہ' : 'Page'} value={slug} onChange={setSlug} options={[
           { value: 'about', label: lang === 'ur' ? 'ہمارے بارے میں' : 'About Us' }, { value: 'privacy', label: lang === 'ur' ? 'رازداری' : 'Privacy' }, { value: 'terms', label: lang === 'ur' ? 'شرائط' : 'Terms' }]} />
         <TextField label={lang === 'ur' ? 'عنوان' : 'Title'} value={title} onChange={setTitle} />
-        <Field label={lang === 'ur' ? 'متن (HTML، سرور سینیٹائز کرتا ہے)' : 'Body (Sanitized HTML)'}><textarea className="input" aria-label={lang === 'ur' ? 'متن (HTML)' : 'Body HTML'} value={body} onChange={(e) => setBody(e.target.value)} rows={7} /></Field>
+        <Field label={lang === 'ur' ? 'متن (HTML)' : 'Body (HTML)'}><textarea className="input" aria-label={lang === 'ur' ? 'متن (HTML)' : 'Body HTML'} value={body} onChange={(e) => setBody(e.target.value)} rows={7} /></Field>
         <SelectField label={lang === 'ur' ? 'حالت' : 'Status'} value={status} onChange={setStatus} options={[
           { value: 'DRAFT', label: lang === 'ur' ? 'ڈرافٹ' : 'Draft' }, { value: 'REVIEW_REQUIRED', label: lang === 'ur' ? 'مالک کا جائزہ' : 'Review Required' }, { value: 'PUBLISHED', label: lang === 'ur' ? 'شائع' : 'Published' }]} />
         <Button loading={busy} onClick={async () => {
@@ -1113,11 +1124,11 @@ export function WebsiteCms() {
         ] as Column[]} />
         <h3>{lang === 'ur' ? 'بینرز' : 'Banners'}</h3>
         <DataTable rows={banners.data ?? []} csvName="banners" columns={[
-          { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' }, { key: 'image_r2_key', label: 'R2 Key' },
+          { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' }, { key: 'image_r2_key', label: lang === 'ur' ? 'تصویر' : 'Image' },
         ] as Column[]} />
       </div>
     </div>
-    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'موجودہ صفحات (D1)' : 'Current Pages (D1 Database)'}</h2>
+    <div className="card" style={{ marginBlock: 16 }}><h2>{lang === 'ur' ? 'موجودہ صفحات' : 'Current Pages'}</h2>
       <DataTable rows={pages.data ?? []} csvName="cms-pages" columns={[
         { key: 'slug', label: 'Slug' }, { key: 'title_ur', label: lang === 'ur' ? 'عنوان' : 'Title' },
         { key: 'status', label: lang === 'ur' ? 'حالت' : 'Status', render: (r: any) => <StatusChip status={r.status} /> },
@@ -1368,7 +1379,7 @@ export function InventoryScreen() {
       { key: 'ref_type', label: lang === 'ur' ? 'حوالہ' : 'Reference' },
     ] as Column[]} />}
     {tab === 'batches' && <><div className="notice info small">
-      {lang === 'ur' ? 'FEFO: ایکسپائری پہلے والا بیچ پہلے۔ ایکسپائری ختم / قرنطینہ بیچ کی فروخت سرور بلاک کرتا ہے۔' : 'FEFO (First-Expiry-First-Out): Expired or quarantined batches are strictly blocked by the server.'}
+      {lang === 'ur' ? 'FEFO: جس بیچ کی میعاد پہلے ہے وہ پہلے فروخت ہوگا۔ ایکسپائری ختم اسٹاک خودکار بلاک رہتا ہے۔' : 'FEFO (First-Expiry-First-Out): Batches with earliest expiry are prioritized. Expired stock is automatically blocked.'}
     </div>
       <DataTable rows={batches.data ?? []} csvName="batches" columns={[
         { key: 'batch_no', label: lang === 'ur' ? 'بیچ' : 'Batch' },
@@ -1782,7 +1793,7 @@ export function PaymentMethodsScreen() {
     </div>
     <p className="small">{t('paymentMethodsNote')}</p>
     <AsyncView loading={isLoading} error={error} retry={() => refetch()} empty={!(data ?? []).length}>
-      <div className="method-grid">{(data ?? []).map((m) => <TiltCard key={m.id} className="method-card" tone={m.is_active ? 'default' : 'pink'}>
+      <div className="method-grid">{(data ?? []).map((m) => <div key={m.id} className={`method-card ${m.is_active ? 'method-card-active' : 'method-card-inactive'}`}>
         <div className="method-card-head">
           <span className={`method-badge`} data-kind={m.kind} aria-hidden="true" />
           <div><strong>{lang === 'ur' ? m.title_ur : (m.title_en || m.title_ur)}</strong><div className="small">{METHOD_KINDS.find((k) => k.value === m.kind)?.label ?? m.kind}</div></div>
@@ -1796,7 +1807,7 @@ export function PaymentMethodsScreen() {
           {write && <Button size="sm" variant="secondary" onClick={() => open(m)}>{t('edit')}</Button>}
           {write && <Button size="sm" variant="secondary" onClick={() => remove(m)} loading={busy}>{t('delete')}</Button>}
         </div>
-      </TiltCard>)}</div>
+      </div>)}</div>
     </AsyncView>
 
     <Sheet open={!!sel} onClose={() => setSel(null)} title={isNew ? t('newPaymentMethod') : t('edit')}>

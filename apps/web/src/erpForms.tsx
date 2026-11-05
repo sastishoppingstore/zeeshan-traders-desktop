@@ -461,7 +461,7 @@ export function GrainForm({ kind }: { kind: 'purchase' | 'sale' }) {
         </div>}
       </div> : <div className="card"><h2>{lang === 'ur' ? 'وزن' : 'Weight'}</h2>
         <TextField label={lang === 'ur' ? 'خالص وزن (کلو)' : 'Net Weight (kg)'} value={netGrams} onChange={setNetGrams} inputMode="decimal" required />
-        <div className="small">{lang === 'ur' ? 'لاٹ بیلنس سے زیادہ فروخت بلاک ہے (سرور چیک)۔' : 'Sales exceeding lot balance are blocked.'}</div>
+        <div className="small">{lang === 'ur' ? 'لاٹ بیلنس سے زیادہ فروخت ممکن نہیں ہے۔' : 'Sales exceeding lot balance are blocked.'}</div>
       </div>}
       <div className="card"><h2>{lang === 'ur' ? 'ریٹ اور رقم' : 'Rate & Amount'}</h2>
         <div className="grid g2">
