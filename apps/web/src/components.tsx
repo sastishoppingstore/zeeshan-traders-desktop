@@ -16,21 +16,33 @@ export function Chip({ children, tone = '', className = '' }: { children: React.
 }
 
 export function StatusChip({ status }: { status: string }) {
-  const map: Record<string, { tone: string; ur: string }> = {
-    POSTED: { tone: 'success', ur: 'پوسٹڈ' }, DRAFT: { tone: 'gray', ur: 'ڈرافٹ' },
-    REVERSED: { tone: 'danger', ur: 'ریورسڈ' }, PENDING_SYNC: { tone: 'warning', ur: 'سنک باقی' },
-    SYNCED: { tone: 'success', ur: 'سنک شدہ' }, CONFLICT: { tone: 'danger', ur: 'تضاد' },
-    EXPIRED: { tone: 'danger', ur: 'ایکسپائری ختم' }, LOW_STOCK: { tone: 'warning', ur: 'کم اسٹاک' },
-    NEW: { tone: 'info', ur: 'نیا' }, REVIEW: { tone: 'gray', ur: 'زیرِ جائزہ' },
-    APPROVED: { tone: 'success', ur: 'منظور' }, REJECTED: { tone: 'danger', ur: 'مسترد' },
-    CONVERTED: { tone: 'info', ur: 'تبدیل شدہ' }, OPEN: { tone: 'warning', ur: 'کھلا' },
-    RESOLVED: { tone: 'success', ur: 'حل شدہ' }, ACTIVE: { tone: 'success', ur: 'فعال' },
-    DISABLED: { tone: 'gray', ur: 'غیر فعال' }, PENDING: { tone: 'warning', ur: 'زیرِ التوا' },
-    FAILED: { tone: 'danger', ur: 'ناکام' }, AVAILABLE: { tone: 'success', ur: 'دستیاب' },
-    OUT: { tone: 'gray', ur: 'ختم' }, CALL: { tone: 'info', ur: 'کال کریں' },
+  const { lang } = useApp();
+  const map: Record<string, { tone: string; ur: string; en: string }> = {
+    POSTED: { tone: 'success', ur: 'پوسٹڈ', en: 'Posted' },
+    DRAFT: { tone: 'gray', ur: 'ڈرافٹ', en: 'Draft' },
+    REVERSED: { tone: 'danger', ur: 'ریورسڈ', en: 'Reversed' },
+    PENDING_SYNC: { tone: 'warning', ur: 'سنک باقی', en: 'Pending Sync' },
+    SYNCED: { tone: 'success', ur: 'سنک شدہ', en: 'Synced' },
+    CONFLICT: { tone: 'danger', ur: 'تضاد', en: 'Conflict' },
+    EXPIRED: { tone: 'danger', ur: 'ایکسپائری ختم', en: 'Expired' },
+    LOW_STOCK: { tone: 'warning', ur: 'کم اسٹاک', en: 'Low Stock' },
+    NEW: { tone: 'info', ur: 'نیا', en: 'New' },
+    REVIEW: { tone: 'gray', ur: 'زیرِ جائزہ', en: 'Under Review' },
+    APPROVED: { tone: 'success', ur: 'منظور', en: 'Approved' },
+    REJECTED: { tone: 'danger', ur: 'مسترد', en: 'Rejected' },
+    CONVERTED: { tone: 'info', ur: 'تبدیل شدہ', en: 'Converted' },
+    OPEN: { tone: 'warning', ur: 'کھلا', en: 'Open' },
+    RESOLVED: { tone: 'success', ur: 'حل شدہ', en: 'Resolved' },
+    ACTIVE: { tone: 'success', ur: 'فعال', en: 'Active' },
+    DISABLED: { tone: 'gray', ur: 'غیر فعال', en: 'Disabled' },
+    PENDING: { tone: 'warning', ur: 'زیرِ التوا', en: 'Pending' },
+    FAILED: { tone: 'danger', ur: 'ناکام', en: 'Failed' },
+    AVAILABLE: { tone: 'success', ur: 'دستیاب', en: 'Available' },
+    OUT: { tone: 'gray', ur: 'ختم', en: 'Out of Stock' },
+    CALL: { tone: 'info', ur: 'کال کریں', en: 'Price on Call' },
   };
-  const s = map[status] ?? { tone: 'gray', ur: status };
-  return <Chip tone={s.tone}>{s.ur}</Chip>;
+  const s = map[status] ?? { tone: 'gray', ur: status, en: status };
+  return <Chip tone={s.tone}>{lang === 'ur' ? s.ur : s.en}</Chip>;
 }
 
 export function Field({ label, helper, error, children, required, htmlFor }: {
@@ -150,10 +162,12 @@ export function DataTable({ rows, columns, loading, error, onRetry, onRow, empty
   rows: any[]; columns: Column[]; loading?: boolean; error?: unknown; onRetry?: () => void;
   onRow?: (row: any) => void; emptyText?: string; footer?: React.ReactNode; csvName?: string;
 }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const cell = (r: any, c: Column) => c.render ? c.render(r)
     : c.money ? <span className="num">{formatPKR(r[c.key] ?? 0)}</span>
     : c.qty ? <span className="num">{fromMilli(r[c.key] ?? 0)}</span>
+    : c.key === 'name_ur' ? <span>{lang === 'ur' ? r.name_ur : (r.name_en || r.name_ur || '—')}</span>
+    : c.key === 'category_ur' ? <span>{lang === 'ur' ? (r.category_ur || r.category_code) : (r.category_en || r.category_code || r.category_ur || '—')}</span>
     : <span>{String(r[c.key] ?? '—')}</span>;
   if (loading) return <Skeleton />;
   if (error) return <ErrorState error={error} retry={onRetry} />;
@@ -252,13 +266,14 @@ export function OfflineBanner() {
   </div>;
 }
 
-/** Type-ahead combobox with Urdu/English search and "+ نیا شامل کریں". */
+/** Type-ahead combobox with Urdu/English search, multi-token matching, and "+ نیا شامل کریں". */
 export function Combobox({ label, value, onChange, options, onCreate, placeholder, error, required, minChars = 0 }: {
   label: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string; sub?: string }[];
+  options: { value: string; label: string; sub?: string; searchKey?: string }[];
   onCreate?: (name: string) => void; placeholder?: string; error?: string; required?: boolean;
   minChars?: number;
 }) {
+  const { lang } = useApp();
   const selected = options.find((o) => o.value === value);
   const [q, setQ] = useState(selected?.label ?? '');
   const [open, setOpen] = useState(false);
@@ -271,12 +286,16 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
     }
   }, [value, selected?.label]);
 
-  const hasMinChars = !minChars || q.trim().length >= minChars;
+  const hasMinChars = !minChars || !q.trim() || q.trim().length >= minChars;
   const filtered = useMemo(() => {
-    if (!hasMinChars) return [];
     const query = q.trim().toLowerCase();
-    return options.filter((o) => (o.label + ' ' + (o.sub ?? '')).toLowerCase().includes(query));
-  }, [options, q, hasMinChars]);
+    if (!query) return options;
+    const tokens = query.split(/\s+/).filter(Boolean);
+    return options.filter((o) => {
+      const hay = (o.label + ' ' + (o.sub ?? '') + ' ' + (o.searchKey ?? '')).toLowerCase();
+      return tokens.every((token) => hay.includes(token));
+    });
+  }, [options, q]);
 
   const id = useId();
 
@@ -286,8 +305,11 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
         id={id}
         className="input"
         value={q}
-        placeholder={placeholder ?? 'تلاش کریں…'}
-        onFocus={() => setOpen(true)}
+        placeholder={placeholder ?? (lang === 'ur' ? 'تلاش کریں…' : 'Search…')}
+        onFocus={(e) => {
+          setOpen(true);
+          e.currentTarget.select();
+        }}
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
@@ -313,7 +335,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
             fontSize: 14,
             padding: 4,
           }}
-          aria-label="Clear"
+          aria-label={lang === 'ur' ? 'صاف کریں' : 'Clear'}
         >
           ✕
         </button>
@@ -331,7 +353,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
       }}>
         {!hasMinChars ? (
           <div className="small" style={{ padding: '12px 14px', color: 'var(--text-dim)' }}>
-            کم از کم {minChars} حروف لکھیں (مثلاً پروڈکٹ نام کے 2 حروف)…
+            {lang === 'ur' ? `کم از کم ${minChars} حروف لکھیں (مثلاً پروڈکٹ نام کے 2 حروف)…` : `Type at least ${minChars} characters to filter…`}
           </div>
         ) : filtered.length > 0 ? (
           filtered.map((o) => (
@@ -359,7 +381,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
           ))
         ) : (
           <div className="small" style={{ padding: '12px 14px', color: 'var(--text-dim)' }}>
-            کوئی نتیجہ نہیں ملا
+            {lang === 'ur' ? 'کوئی نتیجہ نہیں ملا' : 'No results found'}
           </div>
         )}
 
@@ -373,7 +395,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
               setOpen(false);
             }}
           >
-            + نیا شامل کریں: {q}
+            {lang === 'ur' ? `+ نیا شامل کریں: ${q}` : `+ Add new: ${q}`}
           </button>
         )}
       </div>

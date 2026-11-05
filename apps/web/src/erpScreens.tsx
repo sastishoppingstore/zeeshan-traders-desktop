@@ -81,7 +81,7 @@ export function GenericList({ config }: { config: any }) {
         ...config.columns.map((c: any) => ({
           ...c,
           label: lang === 'ur' ? c.label : (c.label_en || c.label),
-          render: c.key === 'status' ? (r: any) => <StatusChip status={r.status} /> : c.render
+          render: (r: any) => c.key === 'status' ? <StatusChip status={r.status} /> : (c.render ? c.render(r, lang) : undefined)
         })),
       ] as Column[]}
         onRow={config.detail ? (r) => nav(config.detail(r)) : undefined}

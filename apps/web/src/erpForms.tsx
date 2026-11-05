@@ -30,14 +30,46 @@ const emptyLine = (): Line => ({ product_id: '', qty_milli: 0, rate_paisa: 0, di
 interface PayPart { account_id: string; amount_paisa: number }
 const emptyPay = (): PayPart => ({ account_id: 'acct-cash', amount_paisa: 0 });
 
+export function getProductSearchTokens(p: any): string {
+  const ur = p.name_ur || '';
+  const en = (p.name_en || '').toLowerCase();
+  const sku = (p.sku || '').toLowerCase();
+  const cat = (p.category_id || '').toLowerCase();
+  const extra: string[] = [];
+
+  if (ur.includes('گندم') || en.includes('wheat')) extra.push('gandam', 'gandum', 'gehun', 'wheat');
+  if (ur.includes('سیمنٹ') || en.includes('cement')) extra.push('cement', 'seemant', 'simint', 'lucky', 'maple');
+  if (ur.includes('یوریا') || en.includes('urea')) extra.push('urea', 'yuria', 'khad');
+  if (ur.includes('ڈی اے پی') || en.includes('dap')) extra.push('dap', 'khad', 'fertilizer');
+  if (ur.includes('این پی کے') || en.includes('npk')) extra.push('npk');
+  if (ur.includes('چاول') || ur.includes('دھان') || ur.includes('مونجی') || en.includes('rice') || en.includes('paddy')) {
+    extra.push('chawal', 'dhan', 'monji', 'rice', 'basmati', 'sella', 'paddy');
+  }
+  if (ur.includes('ونڈا') || en.includes('wanda')) extra.push('wanda', 'vanda', 'chuni');
+  if (ur.includes('چوکر') || en.includes('bran')) extra.push('chokar', 'choker', 'bran', 'bhoosa');
+  if (ur.includes('تل') || en.includes('sesame')) extra.push('til', 'tal', 'sesame', 'tolai');
+  if (ur.includes('باجرہ') || en.includes('bajra')) extra.push('bajra', 'millet');
+  if (ur.includes('مکئی') || en.includes('maize')) extra.push('makai', 'makki', 'maize', 'corn');
+  if (ur.includes('مونگ') || en.includes('moong')) extra.push('moong', 'mung', 'daal');
+  if (ur.includes('سرسوں') || en.includes('mustard')) extra.push('sarson', 'mustard', 'toria');
+  if (ur.includes('کیڑے') || en.includes('pesticide') || en.includes('insecticide')) {
+    extra.push('keeray', 'keera', 'spray', 'pesticide', 'insecticide', 'zahar', 'dawa');
+  }
+  if (ur.includes('کپاس') || ur.includes('بنولہ') || ur.includes('کھلی') || en.includes('cotton')) {
+    extra.push('kapas', 'cotton', 'khal', 'banola');
+  }
+
+  return `${ur} ${en} ${sku} ${cat} ${extra.join(' ')}`.toLowerCase();
+}
+
 export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: string }) {
   const { t, online, enqueue, toast, can, session, lang } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const quick = params.get('quick') === '1';
   const bookDef = BOOK_MAP[book];
-  const products = useGet<any>('products-ref', '/api/v1/products?limit=100');
-  const parties = useGet<any[]>('parties-ref', '/api/v1/parties?limit=100');
+  const products = useGet<any>('products-ref', '/api/v1/products?limit=250');
+  const parties = useGet<any[]>('parties-ref', '/api/v1/parties?limit=200');
   const categories = useGet<any[]>('categories-ref', '/api/v1/categories');
   const [date, setDate] = useState(TODAY());
   const [partyId, setPartyId] = useState(''), [partyName, setPartyName] = useState('');
@@ -53,12 +85,30 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
   const [result, setResult] = useState<any>(null), [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  const bookCategoryIds = new Set((categories.data ?? []).filter((c: any) => c.book_code === book ||
-    c.id === `cat-${book.toLowerCase()}`).map((c: any) => c.id));
-  const productRows = (products.data?.rows ?? []).filter((p: any) => bookCategoryIds.size === 0 || bookCategoryIds.has(p.category_id));
-  const productOptions = productRows.map((p: any) => ({ value: p.id, label: `${p.name_ur} ${p.name_en ? '(' + p.name_en + ')' : ''}`,
-    sub: `اسٹاک ${fromMilli(p.stock_milli ?? 0)} ${p.base_unit}` }));
-  const partyOptions = (parties.data ?? []).map((p: any) => ({ value: p.id, label: p.name_ur, sub: p.phone }));
+  // Allow all products across categories (Cement, Wheat, Urea, DAP, Wanda, etc.)
+  const productRows: any[] = products.data?.rows ?? [];
+  const productOptions = productRows.map((p: any) => {
+    const ur = p.name_ur || '';
+    const en = p.name_en || '';
+    const sku = p.sku ? ` (${p.sku})` : '';
+    const label = en ? `${ur} / ${en}${sku}` : `${ur}${sku}`;
+    const sub = lang === 'ur'
+      ? `اسٹاک ${fromMilli(p.stock_milli ?? 0)} ${p.base_unit ?? ''}`
+      : `Stock ${fromMilli(p.stock_milli ?? 0)} ${p.base_unit ?? ''}`;
+    return {
+      value: p.id,
+      label,
+      sub,
+      searchKey: getProductSearchTokens(p),
+    };
+  });
+
+  const partyOptions = (parties.data ?? []).map((p: any) => ({
+    value: p.id,
+    label: lang === 'ur' ? p.name_ur : (p.name_en || p.name_ur),
+    sub: p.phone,
+    searchKey: `${p.name_ur || ''} ${p.name_en || ''} ${p.phone || ''}`.toLowerCase(),
+  }));
   useEffect(() => { if (credit) setPayments([{ account_id: 'acct-cash', amount_paisa: 0 }]); }, [credit]);
 
   const subtotal = lines.reduce((a, l) => a + lineAmount(l.qty_milli, l.rate_paisa) - l.discount_paisa, 0);
@@ -71,22 +121,29 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
   const setLine = (i: number, patch: Partial<Line>) => { setDirty(true); setLines((ls) => ls.map((l, j) => j === i ? { ...l, ...patch } : l)); };
   const addLine = () => setLines((ls) => [...ls, emptyLine()]);
 
-  const buildPayload = () => ({
-    date, book_code: book, party_id: partyId || null,
-    party_name: partyId ? undefined : partyName, party_phone: partyPhone || undefined,
-    party_address: partyAddress || undefined, cnic: cnic || undefined,
-    season, supplier_invoice_no: supplierInvoice || undefined,
-    lines: lines.filter((l) => l.product_id && l.qty_milli > 0).map((l) => ({
-      product_id: l.product_id, qty_milli: l.qty_milli, rate_paisa: l.rate_paisa,
-      discount_paisa: l.discount_paisa, batch_id: l.batch_id || undefined,
-      ...(l.batch_no ? { batch_no: l.batch_no } : {}), ...(l.mfg_date ? { mfg_date: l.mfg_date } : {}),
-      ...(l.expiry_date ? { expiry_date: l.expiry_date } : {}), ...(l.manufacturer ? { manufacturer: l.manufacturer } : {}),
-      bags: l.bags || undefined, weight_per_bag_grams: l.weight_per_bag_grams || undefined,
-    })),
-    discount_paisa: discount, freight_paisa: freight, loading_paisa: loadingC, other_paisa: other,
-    payments: paid > 0 ? payments.filter((p) => p.amount_paisa > 0).map((p) => ({ account_id: p.account_id, amount_paisa: p.amount_paisa })) : [],
-    note, quick,
-  });
+  const buildPayload = () => {
+    const firstProduct = productRows.find((p) => p.id === lines[0]?.product_id);
+    const productBook = firstProduct?.category_id
+      ? (categories.data ?? []).find((c: any) => c.id === firstProduct.category_id)?.book_code
+      : undefined;
+    const finalBook = productBook || book || 'FERT';
+    return {
+      date, book_code: finalBook, party_id: partyId || null,
+      party_name: partyId ? undefined : partyName, party_phone: partyPhone || undefined,
+      party_address: partyAddress || undefined, cnic: cnic || undefined,
+      season, supplier_invoice_no: supplierInvoice || undefined,
+      lines: lines.filter((l) => l.product_id && l.qty_milli > 0).map((l) => ({
+        product_id: l.product_id, qty_milli: l.qty_milli, rate_paisa: l.rate_paisa,
+        discount_paisa: l.discount_paisa, batch_id: l.batch_id || undefined,
+        ...(l.batch_no ? { batch_no: l.batch_no } : {}), ...(l.mfg_date ? { mfg_date: l.mfg_date } : {}),
+        ...(l.expiry_date ? { expiry_date: l.expiry_date } : {}), ...(l.manufacturer ? { manufacturer: l.manufacturer } : {}),
+        bags: l.bags || undefined, weight_per_bag_grams: l.weight_per_bag_grams || undefined,
+      })),
+      discount_paisa: discount, freight_paisa: freight, loading_paisa: loadingC, other_paisa: other,
+      payments: paid > 0 ? payments.filter((p) => p.amount_paisa > 0).map((p) => ({ account_id: p.account_id, amount_paisa: p.amount_paisa })) : [],
+      note, quick,
+    };
+  };
 
   const loadSnapshot = async (number: string) => {
     try {
@@ -98,16 +155,16 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
 
   const submit = async (mode: 'post' | 'draft' | 'new') => {
     setErr(''); setFieldErrors({});
-    if (!partyId && partyName.trim().length < 2) { setErr('فریق کا نام درکار ہے'); return; }
-    if (!lines.some((l) => l.product_id && l.qty_milli > 0)) { setErr('کم از کم ایک لائن درکار ہے'); return; }
-    if (paid > total) { setErr('ادا شدہ رقم کل سے زیادہ ہے'); return; }
-    if (kind === 'sale' && book === 'PEST' && (!partyPhone || !partyAddress)) { setErr('پیسٹی سائیڈ کے لیے موبائل اور پتہ لازمی ہے'); return; }
+    if (!partyId && partyName.trim().length < 2) { setErr(lang === 'ur' ? 'فریق کا نام درکار ہے' : 'Party name is required'); return; }
+    if (!lines.some((l) => l.product_id && l.qty_milli > 0)) { setErr(lang === 'ur' ? 'کم از کم ایک لائن درکار ہے' : 'At least one line is required'); return; }
+    if (paid > total) { setErr(lang === 'ur' ? 'ادا شدہ رقم کل سے زیادہ ہے' : 'Paid amount exceeds total'); return; }
+    if (kind === 'sale' && book === 'PEST' && (!partyPhone || !partyAddress)) { setErr(lang === 'ur' ? 'پیسٹی سائیڈ کے لیے موبائل اور پتہ لازمی ہے' : 'Mobile and address are required for pesticide sale'); return; }
     if (kind === 'purchase' && book === 'PEST' && lines.some((l) => !l.batch_no || !l.mfg_date || !l.expiry_date || !l.manufacturer)) {
-      setErr('پیسٹی سائیڈ خرید میں بیچ، MFG، ایکسپائری اور مینوفیکچرر لازمی ہیں'); return;
+      setErr(lang === 'ur' ? 'پیسٹی سائیڈ خرید میں بیچ، MFG، ایکسپائری اور مینوفیکچرر لازمی ہیں' : 'Batch, MFG, expiry and manufacturer are required for pesticide purchase'); return;
     }
     if (mode === 'draft') {
       await saveDraft(`${kind}-${book}-${Date.now()}`, { ...buildPayload(), saved_at: new Date().toISOString() });
-      toast('ڈرافٹ محفوظ ہو گیا (مقامی)'); setDirty(false); return;
+      toast(lang === 'ur' ? 'ڈرافٹ محفوظ ہو گیا (مقامی)' : 'Draft saved locally'); setDirty(false); return;
     }
     setBusy(true);
     try {
@@ -117,7 +174,7 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
         setResult({ number: `D${op.device_id}-${op.id.slice(0, 6)}`, provisional: true, id: op.id });
       } else {
         const r = await api<any>(kind === 'sale' ? '/api/v1/sales' : '/api/v1/purchases', { method: 'POST', body: payload });
-        setResult(r); toast(`${kind === 'sale' ? 'فروخت' : 'خرید'} پوسٹ ہو گئی: ${r.number}`);
+        setResult(r); toast(lang === 'ur' ? `${kind === 'sale' ? 'فروخت' : 'خرید'} پوسٹ ہو گئی: ${r.number}` : `${kind === 'sale' ? 'Sale' : 'Purchase'} posted: ${r.number}`);
         await loadSnapshot(r.number);
       }
       setDirty(false);
@@ -135,7 +192,7 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
           aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
           <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
         </button>
-        <h1>{kind === 'sale' ? (lang === 'ur' ? 'فروخت' : 'Sale') : (lang === 'ur' ? 'خرید' : 'Purchase')} — {lang === 'ur' ? (bookDef?.ur ?? book) : (bookDef?.en || bookDef?.ur || book)}</h1>
+        <h1>{kind === 'sale' ? (lang === 'ur' ? 'فروخت انوائس' : 'Sale Invoice') : (lang === 'ur' ? 'خریداری انوائس' : 'Purchase Invoice')}</h1>
       </div>
       <div className="row">
         <Chip tone={quick ? 'warning' : 'gray'}>{quick ? (lang === 'ur' ? 'تیز اندراج' : 'Quick Entry') : (lang === 'ur' ? 'تفصیلی فارم' : 'Detailed Form')}</Chip>
@@ -143,22 +200,26 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
       </div>
     </div>
 
-    {/* Book selector tabs: switch between books cleanly */}
+    {/* Clean Invoice Type Switcher */}
     <div className="tabs no-print" style={{ marginBlock: '8px 14px' }}>
-      {BOOKS.filter((b) => b.kind === 'goods').map((b) => (
-        <button
-          key={b.code}
-          type="button"
-          className={b.code === book ? 'active' : ''}
-          onClick={() => nav(`/erp/${b.code === 'FERT' ? 'fertilizer' : b.code === 'PEST' ? 'pesticide' : `goods/${b.code}`}/${kind}/new`)}
-        >
-          {lang === 'ur' ? b.ur : (b.en || b.ur)}
-        </button>
-      ))}
+      <button
+        type="button"
+        className={kind === 'sale' ? 'active' : ''}
+        onClick={() => nav(`/erp/sales/new`)}
+      >
+        {lang === 'ur' ? 'فروخت انوائس (Sale Invoice)' : 'Sale Invoice'}
+      </button>
+      <button
+        type="button"
+        className={kind === 'purchase' ? 'active' : ''}
+        onClick={() => nav(`/erp/purchases/new`)}
+      >
+        {lang === 'ur' ? 'خریداری انوائس (Purchase Invoice)' : 'Purchase Invoice'}
+      </button>
     </div>
 
     {quick && <div className="notice info small">{lang === 'ur' ? 'تیز اندراج میں صرف نام، تعداد، رقم اور نقد/ادھار درج کریں۔' : 'In quick entry, just enter name, qty, amount and cash/credit.'}
-      <Link to={`/erp/${book === 'FERT' ? 'fertilizer' : book === 'PEST' ? 'pesticide' : `goods/${book}`}/${kind}/new`}> {lang === 'ur' ? 'تفصیلی فارم' : 'Detailed Form'} </Link></div>}
+      <Link to={`/erp/${kind === 'sale' ? 'sales' : 'purchases'}/new`}> {lang === 'ur' ? 'تفصیلی فارم' : 'Detailed Form'} </Link></div>}
 
     {!result ? <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
       <div className="card">
@@ -191,10 +252,10 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
         {lines.map((l, i) => <div key={i} className="card" style={{ marginBlockEnd: 12, background: 'var(--bg)' }}>
           <div className="between"><strong>{lang === 'ur' ? `آئٹم #${i + 1}` : `Item #${i + 1}`}</strong>
             {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((_, j) => j !== i))} aria-label={lang === 'ur' ? 'لائن ہٹائیں' : 'Remove line'}><Mark kind="x" /></Button>}</div>
-          <Combobox label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={l.product_id} minChars={2} onChange={(v) => {
+          <Combobox label={lang === 'ur' ? 'مصنوعات' : 'Product'} value={l.product_id} minChars={0} onChange={(v) => {
             const p = productRows.find((x: any) => x.id === v);
             setLine(i, { product_id: v, rate_paisa: p ? (kind === 'sale' ? p.sale_rate_paisa : p.purchase_rate_paisa) : 0 });
-          }} options={productOptions} placeholder={lang === 'ur' ? 'پروڈکٹ نام کے کم از کم 2 حروف لکھیں (مثلاً یوریا، ڈی اے پی)…' : 'Type at least 2 letters of product name…'} required />
+          }} options={productOptions} placeholder={lang === 'ur' ? 'پروڈکٹ تلاش کریں (مثلاً cement، گندم، یوریا، ڈی اے پی)…' : 'Search product (e.g. cement, gandam, urea, dap)...'} required />
           <div className="grid g2">
             <QtyField label={lang === 'ur' ? 'تعداد' : 'Quantity'} milli={l.qty_milli} onChange={(v) => setLine(i, { qty_milli: v })}
               unit={productRows.find((p: any) => p.id === l.product_id)?.base_unit} required />
@@ -215,7 +276,7 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
               <TextField label={lang === 'ur' ? 'تاریخِ تیاری' : 'Mfg Date'} value={l.mfg_date} onChange={(v) => setLine(i, { mfg_date: v })} type="date" required={kind === 'purchase'} />
               <TextField label={lang === 'ur' ? 'ایکسپائری' : 'Expiry Date'} value={l.expiry_date} onChange={(v) => setLine(i, { expiry_date: v })} type="date" required={kind === 'purchase'} />
             </div>}
-          {!quick && book === 'FERT' && <div className="grid g2">
+          {!quick && (book === 'FERT' || productRows.find((p: any) => p.id === l.product_id)?.category_id === 'cat-fert') && <div className="grid g2">
             <TextField label={lang === 'ur' ? 'بوریوں کی تعداد' : 'Number of Bags'} value={String(l.bags || '')} onChange={(v) => setLine(i, { bags: Number(v) || 0 })} inputMode="numeric" />
             <TextField label={lang === 'ur' ? 'وزن فی بوری (گرام)' : 'Weight per Bag (g)'} value={String(l.weight_per_bag_grams || '')}
               onChange={(v) => setLine(i, { weight_per_bag_grams: Number(v) || 0 })} inputMode="numeric" />
@@ -248,41 +309,34 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
           <span className="k">{lang === 'ur' ? 'اضافی / رعایت' : 'Extras / Discount'}</span><span className="v num">{formatPKR(extras)}</span>
           <span className="k">{lang === 'ur' ? 'کل' : 'Grand Total'}</span><span className="v num">{formatPKR(total)}</span>
           <span className="k">{lang === 'ur' ? 'ادا شدہ' : 'Paid'}</span><span className="v num">{formatPKR(paid)}</span>
-          <span className="k">{lang === 'ur' ? 'بقایا (ادھار)' : 'Balance Due'}</span><span className="v num" style={{ color: due > 0 ? 'var(--danger)' : undefined }}>{formatPKR(due)}</span>
+          <span className="k">{lang === 'ur' ? 'بقایا' : 'Due Balance'}</span><span className="v num" style={{ color: due > 0 ? 'var(--danger)' : undefined }}>{formatPKR(due)}</span>
         </div>
-        {balanceWarning > 0 && due > balanceWarning && <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? 'کریڈٹ حد سے تجاوز' : 'Credit Limit Exceeded'}</div>}
-      </div>
-
-      <div className="card"><TextField label={lang === 'ur' ? 'نوٹ' : 'Note'} value={note} onChange={setNote} />
+        {balanceWarning > 0 && due > balanceWarning &&
+          <div className="err" role="alert" style={{ marginBlockStart: 12 }}>
+            <Mark kind="warn" /> {lang === 'ur' ? `گاہک کی کریڈٹ حد (${formatPKR(balanceWarning)}) پار ہو رہی ہے` : `Customer credit limit (${formatPKR(balanceWarning)}) exceeded`}
+          </div>}
+        <TextField label={lang === 'ur' ? 'نوٹ' : 'Note'} value={note} onChange={setNote} />
         {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
-        {Object.keys(fieldErrors).length > 0 && <pre>{JSON.stringify(fieldErrors, null, 2)}</pre>}
-        <div className="btn-row">
+        <div className="btn-row" style={{ marginBlockStart: 16 }}>
           <Button onClick={() => submit('post')} loading={busy}>{lang === 'ur' ? 'محفوظ کریں اور پوسٹ کریں' : 'Save & Post'}</Button>
-          <Button variant="secondary" onClick={() => submit('new')} loading={busy}>{lang === 'ur' ? 'محفوظ کریں اور نیا' : 'Save & New'}</Button>
-          <Button variant="ghost" onClick={() => submit('draft')}>{lang === 'ur' ? 'ڈرافٹ محفوظ کریں' : 'Save Draft'}</Button>
+          <Button variant="secondary" onClick={() => submit('draft')} disabled={busy}>{lang === 'ur' ? 'ڈرافٹ رکھیں' : 'Save Draft'}</Button>
           <Button variant="ghost" onClick={() => { if (!dirty || confirm(lang === 'ur' ? 'تبدیلیاں ضائع ہوں گی؟' : 'Discard changes?')) nav(-1); }}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
         </div>
       </div>
-    </div> : <div className="card">
-      <h2><Mark kind="check-circle" /> {kind === 'sale' ? (lang === 'ur' ? 'فروخت پوسٹ ہو گئی' : 'Sale Posted') : (lang === 'ur' ? 'خرید پوسٹ ہو گئی' : 'Purchase Posted')}</h2>
+    </div> : <div className="card"><h2><Mark kind="check-circle" /> {lang === 'ur' ? 'پوسٹ ہو گیا' : 'Posted Successfully'}</h2>
       <p>{lang === 'ur' ? 'نمبر' : 'Number'}: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>
-      <p>{lang === 'ur' ? 'کل' : 'Total'}: <span className="num">{formatPKR(result.total_paisa ?? total)}</span> · {lang === 'ur' ? 'بقایا' : 'Due'}: <span className="num">{formatPKR(result.due_paisa ?? due)}</span></p>
-      {!!result.warnings?.length && <div className="notice">{result.warnings.join(' · ')}</div>}
       {snapshot && <PrintActions snapshot={snapshot} />}
-      {!snapshot && !result.provisional && <div className="small">{lang === 'ur' ? 'دستاویز «دستاویزات سینٹر» سے بھی پرنٹ ہو سکتی ہے۔' : 'Document can also be printed from Documents Centre.'}</div>}
-      <div className="btn-row">
-        <Link className="btn btn-secondary" to="/erp/receipts/new">{lang === 'ur' ? '+ رقم وصول' : '+ Receive Money'}</Link>
-        <Button variant="ghost" onClick={() => { setResult(null); setSnapshot(null); }}>{lang === 'ur' ? 'نیا اندراج' : 'New Entry'}</Button>
-        <Link className="btn btn-ghost" to="/erp/documents">{lang === 'ur' ? 'دستاویزات' : 'Documents'}</Link>
-      </div>
-    </div>}
+      <div className="btn-row" style={{ marginBlockStart: 16 }}>
+        <Button onClick={() => submit('new')}>{lang === 'ur' ? 'نیا واؤچر' : 'New Voucher'}</Button>
+        <Link className="btn btn-secondary" to="/erp">{lang === 'ur' ? 'ڈیش بورڈ' : 'Dashboard'}</Link>
+      </div></div>}
   </div>;
 }
 
 // --------------------------------- Grain forms ------------------------------
 export function GrainForm({ kind }: { kind: 'purchase' | 'sale' }) {
   const { crop = 'WHEAT' } = useParams();
-  const { online, enqueue, toast, can, t, session } = useApp();
+  const { online, enqueue, toast, can, t, session, lang } = useApp();
   const nav = useNavigate();
   const [date, setDate] = useState(TODAY());
   const [partyName, setPartyName] = useState(''), [partyId, setPartyId] = useState('');
@@ -350,80 +404,101 @@ export function GrainForm({ kind }: { kind: 'purchase' | 'sale' }) {
 
   if (!can('grains.post')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
   const cropUr = BOOK_MAP[crop]?.ur ?? crop;
-  return <div><h1>{cropUr} — {kind === 'purchase' ? 'خرید از کاشتکار' : 'فروخت'}</h1>
-    {!result ? <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
-      {rateBasis === 'PER_MAUND' && !maundKg && <div className="notice"><Mark kind="warn" /> من کے کلو کی تصدیق ترتیبات میں باقی ہے (مالک ان پٹ درکار)۔</div>}
-      <div className="card"><h2>بنیادی</h2>
-        <TextField label="تاریخ" value={date} onChange={setDate} type="date" required />
-        <Combobox label={kind === 'purchase' ? 'کاشتکار' : 'خریدار'} value={partyId} onChange={setPartyId}
-          options={(parties.data ?? []).map((p: any) => ({ value: p.id, label: p.name_ur, sub: p.phone }))}
-          onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder="نام تلاش کریں یا نیا لکھیں" required />
-        {!partyId && partyName && <Chip tone="success">نیا: {partyName}</Chip>}
-        <div className="grid g2"><TextField label="موبائل" value={phone} onChange={setPhone} />
-          <TextField label="گاؤں" value={village} onChange={setVillage} />
-          <TextField label="گریڈ / کوالٹی" value={grade} onChange={setGrade} /></div>
-        {kind === 'purchase' ? <TextField label="لاٹ نمبر (خالی چھوڑیں تو خودکار)" value={lotNo} onChange={setLotNo} /> :
-          <SelectField label="لاٹ" value={lotId} onChange={setLotId} required
-            options={(lots.data ?? []).map((l: any) => ({ value: l.id, label: `${l.lot_no} — ${formatMaund(l.balance_grams, maundKg || 40)}` }))}
-            placeholder="لاٹ منتخب کریں" />}
+  const cropEn = BOOK_MAP[crop]?.en ?? crop;
+  const cropTitle = lang === 'ur' ? cropUr : cropEn;
+  const kindTitle = kind === 'purchase'
+    ? (lang === 'ur' ? 'خرید از کاشتکار' : 'Purchase from Farmer')
+    : (lang === 'ur' ? 'فروخت' : 'Sale');
+
+  return <div>
+    <div className="between">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="btn btn-ghost btn-sm no-print erp-back-btn" onClick={() => nav(-1)}
+          aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
+          <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
+        </button>
+        <h1>{cropTitle} — {kindTitle}</h1>
       </div>
-      {kind === 'purchase' ? <div className="card"><h2>وزن — شفاف حساب</h2>
+    </div>
+    {!result ? <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
+      {rateBasis === 'PER_MAUND' && !maundKg && <div className="notice"><Mark kind="warn" /> {lang === 'ur' ? 'من کے کلو کی تصدیق ترتیبات میں باقی ہے (مالک ان پٹ درکار)۔' : 'Maund kg confirmation pending in settings (owner input required).'}</div>}
+      <div className="card"><h2>{lang === 'ur' ? 'بنیادی معلومات' : 'Basic Information'}</h2>
+        <TextField label={lang === 'ur' ? 'تاریخ' : 'Date'} value={date} onChange={setDate} type="date" required />
+        <Combobox label={kind === 'purchase' ? (lang === 'ur' ? 'کاشتکار' : 'Farmer') : (lang === 'ur' ? 'خریدار' : 'Buyer')} value={partyId} onChange={setPartyId}
+          options={(parties.data ?? []).map((p: any) => ({ value: p.id, label: lang === 'ur' ? p.name_ur : (p.name_en || p.name_ur), sub: p.phone, searchKey: `${p.name_ur || ''} ${p.name_en || ''} ${p.phone || ''}` }))}
+          onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder={lang === 'ur' ? 'نام تلاش کریں یا نیا لکھیں' : 'Search name or type new'} required />
+        {!partyId && partyName && <Chip tone="success">{lang === 'ur' ? `نیا فریق: ${partyName}` : `New Party: ${partyName}`}</Chip>}
         <div className="grid g2">
-          <TextField label="کچا وزن (کلو)" value={grossKg} onChange={setGrossKg} inputMode="decimal" required />
-          <TextField label="بوریاں" value={bags} onChange={setBags} inputMode="numeric" />
-          <TextField label="بوری کا وزن (کلو)" value={tareKg} onChange={setTareKg} inputMode="decimal" />
+          <TextField label={lang === 'ur' ? 'موبائل نمبر' : 'Mobile Number'} value={phone} onChange={setPhone} />
+          <TextField label={lang === 'ur' ? 'گاؤں / پتہ' : 'Village / Address'} value={village} onChange={setVillage} />
+          <TextField label={lang === 'ur' ? 'گریڈ / کوالٹی' : 'Grade / Quality'} value={grade} onChange={setGrade} />
         </div>
-        <h3>کٹوتیاں</h3>
+        {kind === 'purchase' ? <TextField label={lang === 'ur' ? 'لاٹ نمبر (خالی چھوڑیں تو خودکار)' : 'Lot Number (leave empty for auto)'} value={lotNo} onChange={setLotNo} /> :
+          <SelectField label={lang === 'ur' ? 'لاٹ' : 'Lot'} value={lotId} onChange={setLotId} required
+            options={(lots.data ?? []).map((l: any) => ({ value: l.id, label: `${l.lot_no} — ${formatMaund(l.balance_grams, maundKg || 40)}` }))}
+            placeholder={lang === 'ur' ? 'لاٹ منتخب کریں' : 'Select Lot'} />}
+      </div>
+      {kind === 'purchase' ? <div className="card"><h2>{lang === 'ur' ? 'وزن — شفاف حساب' : 'Weight — Transparent Calculation'}</h2>
+        <div className="grid g2">
+          <TextField label={lang === 'ur' ? 'کچا وزن (کلو)' : 'Gross Weight (kg)'} value={grossKg} onChange={setGrossKg} inputMode="decimal" required />
+          <TextField label={lang === 'ur' ? 'بوریاں' : 'Bags'} value={bags} onChange={setBags} inputMode="numeric" />
+          <TextField label={lang === 'ur' ? 'بوری کا وزن (کلو)' : 'Bag Weight (kg)'} value={tareKg} onChange={setTareKg} inputMode="decimal" />
+        </div>
+        <h3>{lang === 'ur' ? 'کٹوتیاں' : 'Deductions'}</h3>
         {deductions.map((d, i) => <div key={i} className="grid g2 card" style={{ background: 'var(--bg)', marginBlockEnd: 8 }}>
-          <SelectField label="قسم" value={d.type} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, type: v } : x))}
-            options={[{ value: 'MOISTURE', label: 'نمی' }, { value: 'CLEANING', label: 'صفائی' }, { value: 'OTHER', label: 'دیگر' }]} />
-          <SelectField label="بنیاد" value={d.basis} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, basis: v } : x))}
-            options={[{ value: 'weight_grams', label: 'گرام' }, { value: 'percent_milli', label: 'فیصد (1000 = 1%)' }]} />
-          <TextField label="قدر" value={d.value} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, value: v } : x))} inputMode="decimal" />
-          <TextField label="نوٹ" value={d.note} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, note: v } : x))} />
-          <Button variant="ghost" size="sm" onClick={() => setDeductions(deductions.filter((_, j) => j !== i))}>حذف</Button>
+          <SelectField label={lang === 'ur' ? 'قسم' : 'Type'} value={d.type} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, type: v } : x))}
+            options={[{ value: 'MOISTURE', label: lang === 'ur' ? 'نمی' : 'Moisture' }, { value: 'CLEANING', label: lang === 'ur' ? 'صفائی' : 'Cleaning' }, { value: 'OTHER', label: lang === 'ur' ? 'دیگر' : 'Other' }]} />
+          <SelectField label={lang === 'ur' ? 'بنیاد' : 'Basis'} value={d.basis} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, basis: v } : x))}
+            options={[{ value: 'weight_grams', label: lang === 'ur' ? 'گرام' : 'Grams' }, { value: 'percent_milli', label: lang === 'ur' ? 'فیصد (1000 = 1%)' : 'Percent (1000 = 1%)' }]} />
+          <TextField label={lang === 'ur' ? 'قدر' : 'Value'} value={d.value} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, value: v } : x))} inputMode="decimal" />
+          <TextField label={lang === 'ur' ? 'نوٹ' : 'Note'} value={d.note} onChange={(v) => setDeductions(deductions.map((x, j) => j === i ? { ...x, note: v } : x))} />
+          <Button variant="ghost" size="sm" onClick={() => setDeductions(deductions.filter((_, j) => j !== i))}>{lang === 'ur' ? 'حذف' : 'Delete'}</Button>
         </div>)}
-        <Button variant="secondary" size="sm" onClick={() => setDeductions([...deductions, { type: 'MOISTURE', basis: 'weight_grams', value: '', note: '' }])}>+ کٹوتی</Button>
+        <Button variant="secondary" size="sm" onClick={() => setDeductions([...deductions, { type: 'MOISTURE', basis: 'weight_grams', value: '', note: '' }])}>{lang === 'ur' ? '+ کٹوتی شامل کریں' : '+ Add Deduction'}</Button>
         {computed && <div className="card" style={{ marginBlockStart: 12 }}>
-          <strong>خالص وزن: <span className="num">{formatMaund((computed as any).netGrams ?? 0, maundKg || 40)}</span></strong>
+          <strong>{lang === 'ur' ? 'خالص وزن: ' : 'Net Weight: '}<span className="num">{formatMaund((computed as any).netGrams ?? 0, maundKg || 40)}</span></strong>
           <pre>{(computed as any).arithmetic?.join('\n') ?? (computed as any).error}</pre>
         </div>}
-      </div> : <div className="card"><h2>وزن</h2>
-        <TextField label="خالص وزن (کلو)" value={netGrams} onChange={setNetGrams} inputMode="decimal" required />
-        <div className="small">لاٹ بیلنس سے زیادہ فروخت بلاک ہے (سرور چیک)۔</div>
+      </div> : <div className="card"><h2>{lang === 'ur' ? 'وزن' : 'Weight'}</h2>
+        <TextField label={lang === 'ur' ? 'خالص وزن (کلو)' : 'Net Weight (kg)'} value={netGrams} onChange={setNetGrams} inputMode="decimal" required />
+        <div className="small">{lang === 'ur' ? 'لاٹ بیلنس سے زیادہ فروخت بلاک ہے (سرور چیک)۔' : 'Sales exceeding lot balance are blocked.'}</div>
       </div>}
-      <div className="card"><h2>ریٹ اور رقم</h2>
+      <div className="card"><h2>{lang === 'ur' ? 'ریٹ اور رقم' : 'Rate & Amount'}</h2>
         <div className="grid g2">
-          <SelectField label="ریٹ کی بنیاد" value={rateBasis} onChange={setRateBasis}
-            options={[{ value: 'PER_MAUND', label: 'فی من' }, { value: 'PER_KG', label: 'فی کلو' }]} />
-          <MoneyField label={rateBasis === 'PER_MAUND' ? 'ریٹ فی من' : 'ریٹ فی کلو'} paisa={rate} onChange={setRate} required />
+          <SelectField label={lang === 'ur' ? 'ریٹ کی بنیاد' : 'Rate Basis'} value={rateBasis} onChange={setRateBasis}
+            options={[{ value: 'PER_MAUND', label: lang === 'ur' ? 'فی من' : 'Per Maund' }, { value: 'PER_KG', label: lang === 'ur' ? 'فی کلو' : 'Per Kg' }]} />
+          <MoneyField label={rateBasis === 'PER_MAUND' ? (lang === 'ur' ? 'ریٹ فی من' : 'Rate per Maund') : (lang === 'ur' ? 'ریٹ فی کلو' : 'Rate per Kg')} paisa={rate} onChange={setRate} required />
         </div>
         {kind === 'purchase' ? <div className="grid g2">
-          <MoneyField label="کمیشن" paisa={commission} onChange={setCommission} />
-          <MoneyField label="مزدوری" paisa={labour} onChange={setLabour} />
-          <MoneyField label="ٹرانسپورٹ" paisa={transport} onChange={setTransport} />
+          <MoneyField label={lang === 'ur' ? 'کمیشن' : 'Commission'} paisa={commission} onChange={setCommission} />
+          <MoneyField label={lang === 'ur' ? 'مزدوری' : 'Labour'} paisa={labour} onChange={setLabour} />
+          <MoneyField label={lang === 'ur' ? 'ٹرانسپورٹ' : 'Transport'} paisa={transport} onChange={setTransport} />
         </div> : <div className="grid g2">
-          <MoneyField label="کٹوتیاں" paisa={deductionsPaisa} onChange={setDeductionsPaisa} />
-          <MoneyField label="اخراجات" paisa={expensesPaisa} onChange={setExpensesPaisa} />
+          <MoneyField label={lang === 'ur' ? 'کٹوتیاں' : 'Deductions'} paisa={deductionsPaisa} onChange={setDeductionsPaisa} />
+          <MoneyField label={lang === 'ur' ? 'اخراجات' : 'Expenses'} paisa={expensesPaisa} onChange={setExpensesPaisa} />
         </div>}
-        <div className="kv"><span className="k">مال کی قیمت</span><span className="v num">{formatPKR(goods)}</span>
-          <span className="k">کل قابلِ ادائیگی</span><span className="v num">{formatPKR(total)}</span>
-          <span className="k">بقایا</span><span className="v num">{formatPKR(due)}</span></div>
+        <div className="kv">
+          <span className="k">{lang === 'ur' ? 'مال کی قیمت' : 'Goods Value'}</span><span className="v num">{formatPKR(goods)}</span>
+          <span className="k">{lang === 'ur' ? 'کل قابلِ ادائیگی' : 'Total Amount'}</span><span className="v num">{formatPKR(total)}</span>
+          <span className="k">{lang === 'ur' ? 'بقایا' : 'Due Balance'}</span><span className="v num">{formatPKR(due)}</span>
+        </div>
       </div>
-      <div className="card"><h2>ادائیگی</h2><div className="grid g2">
-        <SelectField label="اکاؤنٹ" value={payAccount} onChange={setPayAccount} options={accOptions} />
-        <MoneyField label="ابھی ادا" paisa={paid} onChange={setPaid} />
+      <div className="card"><h2>{lang === 'ur' ? 'ادائیگی' : 'Payment'}</h2><div className="grid g2">
+        <SelectField label={lang === 'ur' ? 'اکاؤنٹ' : 'Account'} value={payAccount} onChange={setPayAccount} options={accOptions} />
+        <MoneyField label={lang === 'ur' ? 'ابھی ادا' : 'Paid Now'} paisa={paid} onChange={setPaid} />
       </div>
         {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
-        <div className="btn-row"><Button onClick={submit} loading={busy}>محفوظ کریں اور پوسٹ کریں</Button>
-          <Button variant="ghost" onClick={() => nav(-1)}>منسوخ</Button></div>
+        <div className="btn-row">
+          <Button onClick={submit} loading={busy}>{lang === 'ur' ? 'محفوظ کریں اور پوسٹ کریں' : 'Save & Post'}</Button>
+          <Button variant="ghost" onClick={() => nav(-1)}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
+        </div>
       </div>
-    </div> : <div className="card"><h2><Mark kind="check-circle" /> پوسٹ ہو گیا</h2>
-      <p>نمبر: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>
+    </div> : <div className="card"><h2><Mark kind="check-circle" /> {lang === 'ur' ? 'پوسٹ ہو گیا' : 'Posted Successfully'}</h2>
+      <p>{lang === 'ur' ? 'نمبر' : 'Number'}: <strong className="num">{result.number}</strong> {result.provisional && <Chip tone="warning">PROVISIONAL</Chip>}</p>
       {result.arithmetic && <pre>{result.arithmetic.join('\n')}</pre>}
-      {kind === 'sale' && result.margin_paisa !== undefined && <p>مارجن: <span className="num">{formatPKR(result.margin_paisa)}</span></p>}
+      {kind === 'sale' && result.margin_paisa !== undefined && <p>{lang === 'ur' ? 'مارجن' : 'Margin'}: <span className="num">{formatPKR(result.margin_paisa)}</span></p>}
       {snapshot && <PrintActions snapshot={snapshot} />}
-      <Button variant="ghost" onClick={() => setResult(null)}>نیا اندراج</Button></div>}
+      <Button variant="ghost" onClick={() => setResult(null)}>{lang === 'ur' ? 'نیا اندراج' : 'New Entry'}</Button></div>}
   </div>;
 }
 

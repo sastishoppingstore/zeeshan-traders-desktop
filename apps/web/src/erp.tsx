@@ -3,14 +3,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from './app-state.js';
 import { api } from './api.js';
-import { Button, TextField, CheckField, Chip, Skeleton, Sheet, OfflineBanner } from './components.js';
+import { Button, TextField, CheckField, Chip, StatusChip, Skeleton, Sheet, OfflineBanner } from './components.js';
 import { Mark } from './ui/marks.js';
 import { NavIcon } from './ui/icons.js';
 import { AuroraBg, GoldDust } from './ui/particles.js';
 import { Reveal } from './ui/motion.js';
 import { IMAGES } from './images.js';
 import { usePinState, PinGate, lockPin } from './offline-security.js';
-import { BOOKS, MONEY_ACCOUNTS } from '@zt/shared';
+import { BOOKS, MONEY_ACCOUNTS, BOOK_MAP } from '@zt/shared';
 import { passkeysSupported, loginWithPasskey } from './passkeys.js';
 import {
   Dashboard, GenericList, ProductForm, ProductImport, HubScreen, CropPage, KhataCentre,
@@ -90,7 +90,7 @@ const QUICK_TILES = [
   { label: 'نیا فریق', en: 'New Party', kind: 'party', book: '', perm: 'parties.read' },
 ] as const;
 
-function TopBar({ title }: { title: string }) {
+function TopBar({ title, onOpenMenu }: { title: string; onOpenMenu: () => void }) {
   const { lang, setLang, online, pending, conflicts, syncing, syncNow, session, logout, t } = useApp();
   const [menu, setMenu] = useState(false);
   const [search, setSearch] = useState(false);
@@ -108,6 +108,16 @@ function TopBar({ title }: { title: string }) {
   const state = !online ? (lang === 'ur' ? 'آف لائن' : 'Offline') : conflicts ? (lang === 'ur' ? `${conflicts} تضاد` : `${conflicts} conflicts`) : syncing ? (lang === 'ur' ? 'سنک ہو رہا ہے' : 'Syncing...') : pending ? (lang === 'ur' ? `${pending} باقی` : `${pending} pending`) : (lang === 'ur' ? 'سنک شدہ' : 'Synced');
   return <>
     <header className="erp-topbar">
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm no-print topbar-menu-btn"
+        onClick={onOpenMenu}
+        aria-label={lang === 'ur' ? 'مینو کھولیں' : 'Open Menu'}
+        title={lang === 'ur' ? 'مینو' : 'Menu'}
+      >
+        <span className="menu-icon" aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>☰</span>
+        <span className="menu-text">{lang === 'ur' ? 'مینو' : 'Menu'}</span>
+      </button>
       {canGoBack && (
         <button
           type="button"
@@ -175,18 +185,85 @@ function QuickSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function Sidebar() {
   const { can, lang } = useApp();
-  return <aside className="sidebar" aria-label={lang === 'ur' ? 'ERP روابط' : 'ERP Navigation'}>
-    {navGroups(can).map((g) => <React.Fragment key={g.group}>
-      <div className="group">{lang === 'ur' ? g.group : (g.group_en || g.group)}</div>
-      {g.items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/erp'} className={({ isActive }) => isActive ? 'active' : ''} title={lang === 'ur' ? i.ur : (i.en || i.ur)}>
-        <NavIcon icon={i.icon} label={lang === 'ur' ? i.ur : (i.en || i.ur)} size={26} /><span className="label">{lang === 'ur' ? i.ur : (i.en || i.ur)}</span>
-      </NavLink>)}
-    </React.Fragment>)}
+  const loc = useLocation();
+  return <aside className="sidebar no-print" aria-label={lang === 'ur' ? 'ERP روابط' : 'ERP Navigation'}>
+    {navGroups(can).map((g) => <div key={g.group} className="sidebar-group-section">
+      <div className="group-title">{lang === 'ur' ? g.group : (g.group_en || g.group)}</div>
+      {g.items.map((i) => {
+        const isActive = loc.pathname === i.to || (i.to !== '/erp' && loc.pathname.startsWith(i.to));
+        return (
+          <NavLink
+            key={i.to}
+            to={i.to}
+            end={i.to === '/erp'}
+            className={`sidebar-3d-btn ${isActive ? 'active' : ''}`}
+            title={lang === 'ur' ? i.ur : (i.en || i.ur)}
+          >
+            <span className="nav-dot" />
+            <span className="btn-label">{lang === 'ur' ? i.ur : (i.en || i.ur)}</span>
+          </NavLink>
+        );
+      })}
+    </div>)}
   </aside>;
+}
+
+function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { can, lang } = useApp();
+  const loc = useLocation();
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="mobile-drawer-overlay no-print" onClick={onClose} role="dialog" aria-modal="true" aria-label={lang === 'ur' ? 'موبائل مینو' : 'Mobile Menu'}>
+      <div className="mobile-drawer-content" onClick={(e) => e.stopPropagation()} dir={lang === 'ur' ? 'rtl' : 'ltr'}>
+        <div className="mobile-drawer-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icons/icon-192.png" alt="" width={30} height={30} style={{ borderRadius: 6 }} />
+            <strong style={{ fontSize: 16, color: '#E7C173' }}>{lang === 'ur' ? 'ذیشان ٹریڈرز' : 'Zeeshan Traders'}</strong>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label={lang === 'ur' ? 'بند کریں' : 'Close'} style={{ fontSize: 16 }}>
+            ✕
+          </button>
+        </div>
+        <div className="mobile-drawer-body">
+          {navGroups(can).map((g) => (
+            <div key={g.group} className="mobile-nav-group">
+              <div className="group-title">{lang === 'ur' ? g.group : (g.group_en || g.group)}</div>
+              {g.items.map((i) => {
+                const isActive = loc.pathname === i.to || (i.to !== '/erp' && loc.pathname.startsWith(i.to));
+                return (
+                  <NavLink
+                    key={i.to}
+                    to={i.to}
+                    end={i.to === '/erp'}
+                    className={`sidebar-3d-btn ${isActive ? 'active' : ''}`}
+                    onClick={onClose}
+                  >
+                    <span className="nav-dot" />
+                    <span className="btn-label">{lang === 'ur' ? i.ur : (i.en || i.ur)}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   const [quick, setQuick] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const loc = useLocation();
   const { can, lang } = useApp();
   const title = useMemo(() => {
@@ -204,15 +281,16 @@ function Shell({ children }: { children: React.ReactNode }) {
   }, [loc.pathname, lang]);
   return <div className="erp-shell">
     <div className="erp-main">
-      <TopBar title={title} /><OfflineBanner />
+      <TopBar title={title} onOpenMenu={() => setMobileNavOpen(true)} /><OfflineBanner />
       <main className="erp-content" id="main">{children}</main>
       <nav className="erp-bottom-nav" aria-label={lang === 'ur' ? 'نیچے والی نیویگیشن' : 'Bottom Navigation'}>
         {BOTTOM_NAV.filter((i) => !i.perm || can(i.perm)).map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/erp'} className={({ isActive }) => isActive ? 'active' : ''}>
-          {i.icon === 'menu' ? <span className="ico"><Mark kind="menu" /></span> : <NavIcon icon={i.icon} label={lang === 'ur' ? i.ur : (i.en || i.ur)} size={30} />}
+          {i.icon === 'menu' ? <span className="ico"><Mark kind="menu" /></span> : <span className="nav-dot" style={{ margin: '4px 0' }} />}
           <span>{lang === 'ur' ? i.ur : (i.en || i.ur)}</span></NavLink>)}
       </nav>
       {QUICK_TILES.some((x) => can(x.perm)) && <button className="fab" onClick={() => setQuick(true)} aria-label={lang === 'ur' ? 'نیا اندراج' : 'New Entry'}>+</button>}
       <QuickSheet open={quick} onClose={() => setQuick(false)} />
+      <MobileNavDrawer open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
     </div>
     <Sidebar />
   </div>;
@@ -467,16 +545,18 @@ function GrainsHub() {
 
 export const LIST_CONFIG: Record<string, any> = {
   sales: { title: 'فروخت', title_en: 'Sales', endpoint: '/api/v1/sales', columns: [
-    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' },
+    { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger', render: (r: any, l = 'ur') => l === 'ur' ? (BOOK_MAP[r.book_code]?.ur ?? r.book_code) : (BOOK_MAP[r.book_code]?.en ?? r.book_code) },
     { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true },
-    { key: 'status', label: 'حالت', label_en: 'Status' }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}`,
+    { key: 'status', label: 'حالت', label_en: 'Status', render: (r: any) => <StatusChip status={r.status} /> }], detail: (r: any) => `/erp/documents?type=SALE&q=${r.number}`,
     actions: [
       { label: '+ نئی فروخت', label_en: '+ New Sale', to: '/erp/sales/new' },
       { label: '+ کھاد فروخت', label_en: '+ Fertilizer Sale', to: '/erp/fertilizer/sale/new' },
       { label: '+ پیسٹی فروخت', label_en: '+ Pesticide Sale', to: '/erp/pesticide/sale/new' },
     ] },
   purchases: { title: 'خرید', title_en: 'Purchases', endpoint: '/api/v1/purchases', columns: [
-    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' },
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' },
+    { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger', render: (r: any, l = 'ur') => l === 'ur' ? (BOOK_MAP[r.book_code]?.ur ?? r.book_code) : (BOOK_MAP[r.book_code]?.en ?? r.book_code) },
     { key: 'total_paisa', label: 'کل', label_en: 'Total', money: true }, { key: 'due_paisa', label: 'بقایا', label_en: 'Due', money: true }], detail: (r: any) => `/erp/documents?type=PURCHASE&q=${r.number}`,
     actions: [
       { label: '+ نئی خرید', label_en: '+ New Purchase', to: '/erp/purchases/new' },
@@ -484,34 +564,51 @@ export const LIST_CONFIG: Record<string, any> = {
       { label: '+ پیسٹی خرید', label_en: '+ Pesticide Purchase', to: '/erp/pesticide/purchase/new' },
     ] },
   products: { title: 'مصنوعات', title_en: 'Products', endpoint: '/api/v1/products', columns: [
-    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'sku', label: 'SKU', label_en: 'SKU' }, { key: 'category_ur', label: 'زمرہ', label_en: 'Category' },
+    { key: 'name_ur', label: 'نام', label_en: 'Name', render: (r: any, l = 'ur') => l === 'ur' ? r.name_ur : (r.name_en || r.name_ur) },
+    { key: 'sku', label: 'SKU', label_en: 'SKU' },
+    { key: 'category_ur', label: 'زمرہ', label_en: 'Category', render: (r: any, l = 'ur') => l === 'ur' ? (r.category_ur || r.category_name_ur || '—') : (r.category_en || r.category_name_en || r.category_ur || '—') },
     { key: 'stock_milli', label: 'اسٹاک', label_en: 'Stock', qty: true }, { key: 'sale_rate_paisa', label: 'ریٹ', label_en: 'Rate', money: true },
-    { key: 'is_published', label: 'ویب', label_en: 'Web' }], detail: (r: any) => `/erp/products/${r.id}`,
+    { key: 'is_published', label: 'ویب', label_en: 'Web', render: (r: any, l = 'ur') => r.is_published ? (l === 'ur' ? 'شائع شدہ' : 'Published') : (l === 'ur' ? 'ڈرافٹ' : 'Draft') }], detail: (r: any) => `/erp/products/${r.id}`,
     actions: [{ label: '+ نئی مصنوعات', label_en: '+ New Product', to: '/erp/products/new' }, { label: 'CSV درآمد', label_en: 'Import CSV', to: '/erp/products/import' }] },
   parties: { title: 'فریق', title_en: 'Parties', endpoint: '/api/v1/parties', columns: [
-    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'phone', label: 'موبائل', label_en: 'Phone' }, { key: 'type', label: 'قسم', label_en: 'Type' },
+    { key: 'name_ur', label: 'نام', label_en: 'Name', render: (r: any, l = 'ur') => l === 'ur' ? r.name_ur : (r.name_en || r.name_ur) },
+    { key: 'phone', label: 'موبائل', label_en: 'Phone' },
+    { key: 'type', label: 'قسم', label_en: 'Type', render: (r: any, l = 'ur') => {
+      const m: Record<string, { ur: string; en: string }> = {
+        CUSTOMER: { ur: 'گاہک', en: 'Customer' },
+        SUPPLIER: { ur: 'سپلائر', en: 'Supplier' },
+        FARMER: { ur: 'کاشتکار', en: 'Farmer' },
+        EMPLOYEE: { ur: 'ملازم', en: 'Employee' },
+      };
+      return l === 'ur' ? (m[r.type]?.ur ?? r.type) : (m[r.type]?.en ?? r.type);
+    }},
     { key: 'balance_paisa', label: 'بیلنس', label_en: 'Balance', money: true }], detail: (r: any) => `/erp/parties/${r.id}`,
     actions: [{ label: '+ نیا فریق', label_en: '+ New Party', to: '/erp/parties/new' }] },
   expenses: { title: 'اخراجات', title_en: 'Expenses', endpoint: '/api/v1/expenses', columns: [
-    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' }, { key: 'category_ur', label: 'زمرہ', label_en: 'Category' },
+    { key: 'number', label: 'نمبر', label_en: 'Number' }, { key: 'date', label: 'تاریخ', label_en: 'Date' },
+    { key: 'category_ur', label: 'زمرہ', label_en: 'Category', render: (r: any, l = 'ur') => l === 'ur' ? (r.category_ur || r.category_code) : (r.category_en || r.category_code || r.category_ur) },
     { key: 'amount_paisa', label: 'رقم', label_en: 'Amount', money: true }, { key: 'vendor', label: 'وینڈر', label_en: 'Vendor' }],
     actions: [{ label: '+ نیا خرچہ', label_en: '+ New Expense', to: '/erp/expenses/new' }] },
   categories: { title: 'زمرے', title_en: 'Categories', endpoint: '/api/v1/categories', columns: [
-    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'code', label: 'کوڈ', label_en: 'Code' }, { key: 'slug', label: 'Slug', label_en: 'Slug' },
-    { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger' }, { key: 'is_active', label: 'فعال', label_en: 'Active' }],
+    { key: 'name_ur', label: 'نام', label_en: 'Name', render: (r: any, l = 'ur') => l === 'ur' ? r.name_ur : (r.name_en || r.name_ur) },
+    { key: 'code', label: 'کوڈ', label_en: 'Code' }, { key: 'slug', label: 'Slug', label_en: 'Slug' },
+    { key: 'book_code', label: 'کھاتہ', label_en: 'Ledger', render: (r: any, l = 'ur') => l === 'ur' ? (BOOK_MAP[r.book_code]?.ur ?? r.book_code) : (BOOK_MAP[r.book_code]?.en ?? r.book_code) },
+    { key: 'is_active', label: 'فعال', label_en: 'Active', render: (r: any, l = 'ur') => r.is_active ? (l === 'ur' ? 'فعال' : 'Active') : (l === 'ur' ? 'غیر فعال' : 'Inactive') }],
     create: { endpoint: '/api/v1/categories', slugFromName: true, fields: [
-      { name: 'name_ur', label: 'نام (اردو)' }, { name: 'name_en', label: 'English' },
-      { name: 'code', label: 'کوڈ' }, { name: 'sort', label: 'ترتیب', type: 'number' }] } },
+      { name: 'name_ur', label: 'نام (اردو)', label_en: 'Name (Urdu)' }, { name: 'name_en', label: 'English', label_en: 'English' },
+      { name: 'code', label: 'کوڈ', label_en: 'Code' }, { name: 'sort', label: 'ترتیب', label_en: 'Sort Order', type: 'number' }] } },
   brands: { title: 'برانڈز', title_en: 'Brands', endpoint: '/api/v1/brands', columns: [
-    { key: 'name_ur', label: 'نام', label_en: 'Name' }, { key: 'name_en', label: 'English', label_en: 'English' }, { key: 'is_active', label: 'فعال', label_en: 'Active' }],
+    { key: 'name_ur', label: 'نام', label_en: 'Name', render: (r: any, l = 'ur') => l === 'ur' ? r.name_ur : (r.name_en || r.name_ur) },
+    { key: 'name_en', label: 'English', label_en: 'English' },
+    { key: 'is_active', label: 'فعال', label_en: 'Active', render: (r: any, l = 'ur') => r.is_active ? (l === 'ur' ? 'فعال' : 'Active') : (l === 'ur' ? 'غیر فعال' : 'Inactive') }],
     create: { endpoint: '/api/v1/brands', fields: [
-      { name: 'name_ur', label: 'نام (اردو)' }, { name: 'name_en', label: 'English' }] } },
+      { name: 'name_ur', label: 'نام (اردو)', label_en: 'Name (Urdu)' }, { name: 'name_en', label: 'English', label_en: 'English' }] } },
   units: { title: 'یونٹ کنورژن', title_en: 'Unit Conversions', endpoint: '/api/v1/units', columns: [
     { key: 'from_unit', label: 'سے', label_en: 'From' }, { key: 'to_unit', label: 'تک', label_en: 'To' }, { key: 'ratio_milli', label: 'تناسب', label_en: 'Ratio', qty: true },
-    { key: 'confirmed', label: 'تصدیق', label_en: 'Confirmed' }],
+    { key: 'confirmed', label: 'تصدیق', label_en: 'Confirmed', render: (r: any, l = 'ur') => r.confirmed ? (l === 'ur' ? 'تصدیق شدہ' : 'Confirmed') : (l === 'ur' ? 'غیر تصدیق شدہ' : 'Unconfirmed') }],
     create: { endpoint: '/api/v1/units', extra: { confirmed: true }, fields: [
-      { name: 'from_unit', label: 'سے' }, { name: 'to_unit', label: 'تک' },
-      { name: 'ratio_milli', label: 'تناسب (1000 = 1:1)', type: 'number' }] } },
+      { name: 'from_unit', label: 'سے', label_en: 'From' }, { name: 'to_unit', label: 'تک', label_en: 'To' },
+      { name: 'ratio_milli', label: 'تناسب (1000 = 1:1)', label_en: 'Ratio (1000 = 1:1)', type: 'number' }] } },
 };
 
 export const FORM_CONFIG: Record<string, any> = {
