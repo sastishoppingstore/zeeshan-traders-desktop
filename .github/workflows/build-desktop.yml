@@ -1,9 +1,11 @@
 # Builds the Windows desktop installer (electron-builder NSIS, x64) on a real Windows
 # runner, because better-sqlite3 must be compiled against Electron's Windows ABI.
 #
-# ONE-TIME SETUP by the owner — GitHub → Settings → Secrets and variables → Actions →
-# Variables (these are *variables*, not secrets: both values end up baked into the
-# public installer and are visible to anyone who unpacks the asar):
+# API origin — baked into the installer, public by design. It defaults to the live
+# production Worker so a tag push always produces a working package; set the repository
+# *variable* DESKTOP_API_URL (Settings → Secrets and variables → Actions → Variables) to
+# point a build somewhere else. Variables are not secrets: the value ends up inside the
+# public installer and is visible to anyone who unpacks the asar.
 #   DESKTOP_API_URL   the deployed Worker origin the desktop app talks to,
 #                     e.g. https://<worker-name>.workers.dev
 #                     (no trailing path — the app appends /api/v1 itself).
@@ -40,7 +42,9 @@ jobs:
       # The desktop origin, public by design. It is *baked into the package* by
       # scripts/write-desktop-config.mjs (out/desktop-config.json) because an installed app has no
       # access to the runner's environment; config.cjs reads that file at runtime.
-      DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL }}
+      # Repository variable wins; otherwise fall back to the live production Worker so a build
+      # never ships an app that talks to nothing.
+      DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL || 'https://zt-v2.sastishopping-store.workers.dev' }}
       # Keep Electron + electron-builder downloads inside the workspace so actions/cache
       # can restore them (npm ci wipes node_modules, so caching it in-place would not work).
       ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
