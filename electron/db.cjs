@@ -48,6 +48,7 @@ const err = (code, message, extra = {}) => Object.assign(new Error(message), { c
  */
 function buildLocalSchema(db, { log = () => {} } = {}) {
   let added = 0;
+  let repaired = 0;
 
   for (const table of registry.LOCAL_TRACKED_TABLES) {
     if (!tableExists(db, table)) {
@@ -56,13 +57,31 @@ function buildLocalSchema(db, { log = () => {} } = {}) {
     }
     // `synced` = 0 means "pending push". Added to row-tier AND replica tables: replica rows are only
     // ever written by the pull, so they stay 1, but a single rule is easier to trust than two.
-    for (const col of ['synced INTEGER NOT NULL DEFAULT 0', 'local_version INTEGER NOT NULL DEFAULT 0']) {
+    //
+    // The default is 1, not 0. SQLite fills existing rows with the column default, and the rows that
+    // exist at this moment came from the server's own migrations — a shop's seeded chart of accounts,
+    // its 15 categories. Marking those dirty would make the first pull SKIP ~130 rows as "local edits
+    // the server must not overwrite" and park each one as a conflict the shop never made. Only `save()`
+    // and `remove()` set 0, and both bump `local_version`, so `local_version = 0` identifies a row the
+    // desktop has never touched.
+    for (const col of ['synced INTEGER NOT NULL DEFAULT 1', 'local_version INTEGER NOT NULL DEFAULT 0']) {
       const name = col.split(' ')[0];
       if (hasColumn(db, table, name)) continue;
       try { db.prepare(`ALTER TABLE ${quoteId(table)} ADD COLUMN ${col}`).run(); added++; }
       catch (e) { log('could not add local column', { table, column: name, error: e.message }); }
     }
+
+    // Databases built before that default was corrected carry server rows as dirty. Repair them the
+    // same way the default now prevents it, so an installed desktop stops fighting its own pull.
+    if (hasColumn(db, table, 'synced') && hasColumn(db, table, 'local_version')) {
+      try {
+        const fixed = db.prepare(`UPDATE ${quoteId(table)} SET synced = 1
+          WHERE synced = 0 AND local_version = 0`).run().changes;
+        if (fixed) repaired += fixed;
+      } catch (e) { log('could not repair the local dirty flag', { table, error: e.message }); }
+    }
   }
+  if (repaired) log('repaired rows that were marked locally edited without ever being edited', { rows: repaired });
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
@@ -107,7 +126,7 @@ function buildLocalSchema(db, { log = () => {} } = {}) {
     CREATE INDEX IF NOT EXISTS idx_conflicts_created ON local_conflicts(created_at);
   `);
 
-  return { added_columns: added };
+  return { added_columns: added, repaired_rows: repaired };
 }
 
 /** SQLite identifiers are safe if quoted; registry names are already vetted, this is the belt. */
@@ -121,8 +140,12 @@ function quoteId(name) {
  * @param {{file: string, appRoot?: string, log?: Function, driver?: Function}} opts
  */
 function openLocalDb({ file, appRoot = path.resolve(__dirname, '..'), log = () => {}, driver }) {
-  const Better = driver ?? require('better-sqlite3');
-  const db = new Better(file);
+  // better-sqlite3 is the production driver; `sqlite-driver.cjs` falls back to node:sqlite so the same
+  // code paths can be tested — and do run — on a CI box that has never seen the native build.
+  const { db, driver: kind } = driver ? { db: new driver(file), driver: 'injected' } : require('./sqlite-driver.cjs').open(file);
+  if (kind !== 'better-sqlite3' && process.env.ELECTRON_RUN_AS_NODE === undefined && file !== ':memory:') {
+    log('using the node:sqlite driver — better-sqlite3 is not built for this runtime', { kind });
+  }
   db.pragma('journal_mode = WAL');      // reads never block the sync writer
   db.pragma('foreign_keys = ON');       // same enforcement the server has
   db.pragma('busy_timeout = 5000');
@@ -411,15 +434,18 @@ function createStore({ db, file = ':memory:', log = () => {}, boot = {} }) {
         db.prepare(`UPDATE ${table} SET ${set.map((c) => `${quoteId(c)} = ?`).join(', ')} WHERE ${pk} = ?`)
           .run(...set.map((c) => bindable(cols[c])), id);
       } else {
+        // Defaults that mark the row as "local, never pushed" must be in `cols` BEFORE the column
+        // list is frozen — otherwise the INSERT omits them and the schema defaults (version 1,
+        // local_version 0) claim the server has already seen a row it has never heard of.
         if (hasColumn(db, def.table, 'created_at') && !('created_at' in cols)) cols.created_at = at;
-        const insertCols = [def.pk, ...Object.keys(cols).filter((c) => c !== def.pk)];
         if (hasColumn(db, def.table, 'local_version') && !('local_version' in cols)) cols.local_version = 1;
         if (hasColumn(db, def.table, 'version') && !('version' in cols)) {
           // A locally created row has no server version yet; 0 says "never seen by the server".
           cols.version = 0;
         }
+        const insertCols = [def.pk, ...Object.keys(cols).filter((c) => c !== def.pk)];
         db.prepare(`INSERT INTO ${table} (${insertCols.map(quoteId).join(', ')}) VALUES (${insertCols.map(() => '?').join(', ')})`)
-          .run(...insertCols.map((c) => bindable(cols[c] === undefined ? null : cols[c])));
+          .run(...insertCols.map((c) => bindable(c === def.pk ? id : (cols[c] === undefined ? null : cols[c]))));
       }
 
       const stored = db.prepare(`SELECT * FROM ${table} WHERE ${pk} = ?`).get(id);
@@ -480,20 +506,35 @@ function createStore({ db, file = ':memory:', log = () => {}, boot = {} }) {
    * Queue a financial document as an INTENT. The desktop never writes sales/journal/stock rows —
    * the server's posting engine derives them, which is exactly why two devices selling the last bag
    * cannot double-count stock. The op_id doubles as idempotency_key, so a retry is a no-op.
+   *
+   * `key` lets a caller that already named its own intention — the renderer's legacy single-op
+   * `/sync/push` body carries an `idempotency_key` — keep that name, so a second POST of the same
+   * draft updates one queue row instead of adding a second document.
    */
-  function command(opType, payload) {
+  function command(opType, payload, key) {
     const def = registry.commandEntityByOpType(String(opType ?? ''));
     if (!def) return { ok: false, error: 'UNKNOWN_OP_TYPE', message: `Not a dispatchable command: ${opType}` };
     const body = payload && typeof payload === 'object' ? payload : null;
     if (!body) return { ok: false, error: 'BAD_PAYLOAD', message: 'command() needs a payload object' };
     const localTime = typeof body.local_time === 'string' && body.local_time ? body.local_time : nowIso();
     return db.transaction(() => {
-      const opId = ulid();
+      const opId = isId(key) ? String(key) : ulid();
       const ref = String(body.id ?? body.client_ref ?? opId).slice(0, 64);
+      // Only a caller-supplied key can collide; a re-POST of the same draft rewrites that one row.
+      const existing = isId(key) ? db.prepare('SELECT state FROM outbox WHERE op_id=?').get(opId) : null;
+      if (existing) {
+        if (existing.state !== 'PENDING') {
+          return { ok: false, error: 'ALREADY_SYNCED',
+            message: `Intention ${opId} was already answered (${existing.state}) and cannot be rewritten` };
+        }
+        db.prepare(`UPDATE outbox SET payload_json=?, created_at=? WHERE op_id=?`)
+          .run(JSON.stringify({ type: def.opType, payload: body, local_time: localTime }), Date.now(), opId);
+        return { ok: true, queued_as: opId, entity: def.entity, op_type: def.opType, idempotency_key: opId, coalesced: true };
+      }
       db.prepare(`INSERT INTO outbox (op_id,entity,row_id,kind,payload_json,base_version,deleted,state,tries,created_at)
         VALUES (?,?,?,'command',?,?,0,'PENDING',0,?)`)
         .run(opId, def.entity, ref, JSON.stringify({ type: def.opType, payload: body, local_time: localTime }), Date.now());
-      return { ok: true, queued_as: opId, entity: def.entity, op_type: def.opType, idempotency_key: opId };
+      return { ok: true, queued_as: opId, entity: def.entity, op_type: def.opType, idempotency_key: opId, coalesced: false };
     })();
   }
   // outbox.op_id IS the server-side idempotency_key: the same key on a retry is answered from the
@@ -546,7 +587,7 @@ function createStore({ db, file = ':memory:', log = () => {}, boot = {} }) {
         return existing.id;
       }
       const id = ulid();
-      db.prepare(`INSERT INTO local_conflicts (id,entity,row_id,local_data,server_data,reason,created_at)
+      db.prepare(`INSERT INTO local_conflicts (id,entity,row_id,local_data,server_data,reason,created_at,resolved_at)
         VALUES (?,?,?,?,?,?,?,NULL)`).run(id, entity, rowId, localJson, serverJson, reason, at);
       return id;
     },
@@ -612,10 +653,14 @@ function createStore({ db, file = ':memory:', log = () => {}, boot = {} }) {
             db.prepare(`UPDATE ${table} SET ${set.map((c) => `${quoteId(c)} = ?`).join(', ')} WHERE ${pk} = ?`)
               .run(...set.map((c) => bindable(cols[c])), row.row_id);
           }
-          const baseVersion = Number(current?.version ?? 0) || 0;
+          // The server copy in the conflict is authoritative for the version the edit must be based
+          // on — the local row still carries the version it had before the conflicting pull.
+          const baseVersion = Number(server.version ?? current?.version ?? 0) || 0;
           const deleted = Number((current?.deleted ?? local.deleted) || 0);
           // Retire the rejected attempt first, then queue the user's edit against the version the
           // server is on now — the next push carries a fresh base_version and therefore wins.
+          db.prepare(`UPDATE outbox SET state='SYNCED', error='superseded by reapply_mine'
+            WHERE entity=? AND row_id=? AND kind='row' AND state IN ('PENDING','FAILED')`).run(entity.entity, row.row_id);
           db.prepare(`UPDATE outbox SET state='CONFLICT', error='RESOLVED:reapply_mine'
             WHERE entity=? AND row_id=? AND kind='row' AND state='CONFLICT'`).run(entity.entity, row.row_id);
           const op = queueRowOp(entity, row.row_id, data, baseVersion, deleted);

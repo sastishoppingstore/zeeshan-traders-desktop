@@ -2,7 +2,10 @@
  * Runtime configuration for the desktop shell — no hardcoded URLs anywhere.
  *
  * Precedence: process.env.DESKTOP_API_URL  >  <userData>/config.json { "api_base_url": … }
- * The shop's owner sets the URL once in config.json; nothing in this repo knows where the API lives.
+ *             >  <appRoot>/out/desktop-config.json (baked in at build time)
+ * The shop's owner can override the URL once in config.json; the installer itself carries the
+ * origin that CI baked from the DESKTOP_API_URL repository variable, so a fresh install syncs
+ * without anyone editing a file by hand.
  */
 'use strict';
 
@@ -32,9 +35,23 @@ function readConfigFile(userData) {
   }
 }
 
+/** The build-time file written by scripts/write-desktop-config.mjs. Absent in a dev checkout —
+ *  that is not an error, it just means the env var / user config must supply the origin. */
+function readBakedConfig(appRoot) {
+  const file = path.join(appRoot, 'out', 'desktop-config.json');
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { file, raw, error: null };
+  } catch (e) {
+    if (e.code === 'ENOENT') return { file, raw: null, error: null };
+    return { file, raw: null, error: `${file}: ${e.message}` };
+  }
+}
+
 /** Absolute, no trailing slash, http(s) only. Everything else is a configuration error, not a guess. */
 function normaliseBaseUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return { url: null, error: 'api_base_url is not set' };
+  if (/REPLACE-WITH/i.test(value)) return { url: null, error: `api_base_url is still the placeholder: ${value}` };
   let u;
   try { u = new URL(value.trim()); } catch { return { url: null, error: `api_base_url is not a valid URL: ${value}` }; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
@@ -48,18 +65,28 @@ function normaliseBaseUrl(value) {
  */
 function loadConfig({ userData, env = process.env, appRoot = path.resolve(__dirname, '..') }) {
   const { file, raw, error: parseError } = readConfigFile(userData);
+  const baked = readBakedConfig(appRoot);
   const cfg = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw : {}) };
 
-  const candidate = env.DESKTOP_API_URL || cfg.api_base_url || '';
+  // An auto-written template carries the placeholder; treat it as "not configured" so a shipped
+  // build falls through to the origin baked into out/desktop-config.json instead of trying to
+  // resolve REPLACE-WITH-YOUR-WORKER-URL forever.
+  const usable = (v) => (typeof v === 'string' && v.trim() && !/REPLACE-WITH/i.test(v)) ? v.trim() : '';
+  const userUrl = usable(cfg.api_base_url);
+  const bakedUrl = usable(baked.raw?.api_base_url);
+  const fromEnv = usable(env.DESKTOP_API_URL);
+  const candidate = fromEnv || userUrl || bakedUrl;
   const base = normaliseBaseUrl(candidate);
 
   return {
     appRoot,
     userData,
     configFile: file,
-    configError: parseError,
+    bakedConfigFile: baked.file,
+    configError: parseError ?? baked.error,
     apiBaseUrl: base.url,
     apiBaseError: base.error,
+    apiBaseSource: base.url ? (fromEnv ? 'env' : userUrl ? 'user' : 'baked') : null,
     productName: env.ZT_PRODUCT_NAME || cfg.product_name || null,
     dbFile: env.ZT_DB_PATH || path.join(userData, 'zeeshan-traders.db'),
     logDir: path.join(userData, 'logs'),

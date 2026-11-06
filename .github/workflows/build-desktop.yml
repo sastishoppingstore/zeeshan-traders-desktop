@@ -37,10 +37,10 @@ jobs:
     env:
       # BUILD_TARGET switches Vite to the static desktop export (base './' + out/).
       BUILD_TARGET: desktop
-      # The desktop origin, public by design. DESKTOP_API_URL is read by Electron's main
-      # process (sync.cjs); VITE_ is the prefix Vite actually inlines into the renderer.
+      # The desktop origin, public by design. It is *baked into the package* by
+      # scripts/write-desktop-config.mjs (out/desktop-config.json) because an installed app has no
+      # access to the runner's environment; config.cjs reads that file at runtime.
       DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL }}
-      VITE_DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL }}
       # Keep Electron + electron-builder downloads inside the workspace so actions/cache
       # can restore them (npm ci wipes node_modules, so caching it in-place would not work).
       ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
@@ -110,6 +110,9 @@ jobs:
 
       - name: Build the desktop web bundle into out/
         run: npm run build:desktop
+
+      - name: Bake the API origin into the package
+        run: node scripts/write-desktop-config.mjs --required
 
       - name: Verify out/ is a file://-safe static export
         shell: bash

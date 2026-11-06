@@ -139,8 +139,10 @@ function applyServerSchema(db, { appRoot, log = () => {} } = {}) {
 
 /** Columns currently on a table — used everywhere the desktop must not assume a schema by memory. */
 function tableColumns(db, table) {
-  return db.prepare('SELECT name, type, "notnull" AS notnull, dflt_value, pk FROM pragma_table_info(?)')
-    .all(table);
+  // `SELECT *`, not the column list: `notnull` is a SQLite keyword, so naming it bare is a syntax error
+  // and quoting it works on some builds and not on others. Projecting in JS is portable.
+  return db.prepare('SELECT * FROM pragma_table_info(?)').all(table)
+    .map((c) => ({ name: c.name, type: c.type, notnull: c.notnull, dflt_value: c.dflt_value, pk: c.pk }));
 }
 
 function hasColumn(db, table, column) {

@@ -106,9 +106,12 @@ function headOf(sql) {
  * and per-connection PRAGMAs, never for real DDL, so a schema change can never be lost silently.
  */
 function classifyStatement(sql) {
-  const head = headOf(sql);
+  // The first word alone, not `headOf`'s two-word head: `PRAGMA foreign_keys = ON` heads as
+  // "PRAGMA FOREIGN_KEYS", which would never equal the "PRAGMA" prefix and would replay a
+  // per-connection setting over the one db.cjs just chose.
+  const firstWord = /^\s*(\w+)/.exec(headOf(sql))?.[1] ?? '';
   for (const prefix of LOCAL_ONLY_HEADS) {
-    if (head === prefix) return { action: 'skip', reason: 'pragma-is-per-connection' };
+    if (firstWord === prefix) return { action: 'skip', reason: 'pragma-is-per-connection' };
   }
   if (findInternalReferences(sql).length) return { action: 'skip', reason: 'cloudflare-internal' };
   return { action: 'run', reason: '' };

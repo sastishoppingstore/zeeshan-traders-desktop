@@ -127,6 +127,29 @@ step('local bookkeeping schema builds (synced/local_version/meta/outbox/conflict
   const cols = tableColumns(db, 'products').map((c) => c.name);
   assert.ok(!cols.includes('name_zt'));
   assert.ok(cols.includes('name_ur') && cols.includes('synced') && cols.includes('local_version'));
+  // A freshly built mirror must be clean: seeded chart-of-accounts and categories are the server's
+  // rows, and a dirty flag on them would make the first pull skip them and invent conflicts.
+  const falseDirty = registry.LOCAL_TRACKED_TABLES
+    .map((t) => db.prepare(`SELECT COUNT(*) c FROM ${t} WHERE synced = 0 AND local_version = 0`).get().c)
+    .reduce((a, b) => a + b, 0);
+  assert.strictEqual(falseDirty, 0, `${falseDirty} server rows arrived marked as pending local edits`);
+  assert.strictEqual(local.repaired_rows, 0);
+});
+
+step('a database built with the old dirty-by-default is repaired, real edits are not', () => {
+  const rows = db.prepare('SELECT id FROM product_categories LIMIT 3').all();
+  assert.ok(rows.length >= 1, 'the server migrations should have seeded product_categories');
+  for (const r of rows) db.prepare('UPDATE product_categories SET synced = 0, local_version = 0 WHERE id = ?').run(r.id);
+  // One genuine offline edit: dirty AND locally versioned. The repair must leave it alone.
+  db.prepare('UPDATE product_categories SET synced = 0, local_version = 4 WHERE id = ?').run(rows[0].id);
+
+  const repair = buildLocalSchema(db, { log: () => {} });
+  assert.strictEqual(repair.added_columns, 0);
+  assert.strictEqual(repair.repaired_rows, rows.length - 1);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM product_categories WHERE synced = 0').get().c, 1,
+    'only the genuinely edited row may stay dirty');
+  assert.strictEqual(db.prepare('SELECT local_version v FROM product_categories WHERE id = ?').get(rows[0].id).v, 4,
+    'the repair must not touch a real local edit');
 });
 
 step('re-running migration + local schema is a no-op', () => {
