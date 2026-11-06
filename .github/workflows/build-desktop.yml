@@ -144,7 +144,12 @@ jobs:
         run: |
           ls -la dist/*.exe || { echo "::error::no .exe produced under dist/"; exit 1; }
 
+      # Tag builds attach the .exe to a Release, which does not consume artifact storage. Uploading
+      # it here as well used to fail the whole job when the account's artifact quota was full, so
+      # tag runs skip this and non-tag runs tolerate a quota rejection.
       - name: Upload installer (workflow artifact)
+        if: ${{ github.ref_type != 'tag' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: zeeshan-traders-win-x64
@@ -158,6 +163,7 @@ jobs:
       # a later step is skipped; never on a green build).
       - name: Upload electron-builder log (on failure)
         if: ${{ always() && steps.dist.outcome != 'success' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: electron-builder-log-${{ github.run_id }}
