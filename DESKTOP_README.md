@@ -233,6 +233,12 @@ Backfill is automatic: existing rows get `version = 1`, `updated_at` = their exi
 and `deleted = 0` through the migration's defaults. The full deployment runbook is in
 `docs/RUNBOOK.md` / `docs/NEW_PROJECT_DEPLOY.md`.
 
+> **The Worker must be rebuilt from this commit.** A product or category created offline has no
+> slug — the slug is server-owned and `derive_slug` is applied on the row-push create path, exactly
+> as `POST /products` does. On a Worker older than this commit the push is rejected with
+> `NOT NULL constraint failed: products.slug`, so offline-created products never sync. Applying the
+> D1 migration alone is not enough; redeploy the Worker.
+
 Endpoints added for the desktop (all authenticated, rate-limited, input-validated):
 
 | endpoint | purpose |
@@ -256,7 +262,16 @@ Bearer-token auth works without cookies/CSRF for the desktop; the cookie path st
   registry covers every table in `migrations/`.
 - `tests/desktop-local-sync.test.ts` — the local queue on `node:sqlite`: offline create + edit
   coalesce to one push, tombstone delete, clean pull applies, a dirty row is never overwritten and
-  both copies are parked, and both conflict resolutions behave.
+  both copies are parked, both conflict resolutions behave, and a document queues as an intent with
+  a valid `created_at`.
+- `tests/desktop-online-offline.test.ts` — the seam: the real `electron/sync.cjs` and
+  `electron/rest-serve.cjs` driven against the real Worker. Save offline → push → the server row and
+  the local version agree; a web edit comes down on the next pull; a losing offline edit is parked,
+  never clobbered; a tombstone syncs; an offline expense posts through the server engine.
+- `tests/registry-drift.test.ts` — `electron/registry.cjs` is compared to
+  `packages/shared/src/sync.ts` inside `npm test`, so the mirror can never silently drift (this is
+  what caught `website_pages.pk`). `electron/verify-registry.cjs` is the developer's copy of the
+  same gate.
 - `tests/desktop-config.test.ts` — API-origin precedence (env > operator config > baked installer
   value), placeholder rejection, and no placeholder template when the installer carries an origin.
 - `tests/version-guard.test.ts` — `base_version` on products/categories/settings returns
