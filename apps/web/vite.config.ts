@@ -2,15 +2,29 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
+// Desktop (Electron) differs from web for two reasons, and nothing else:
+//   1. base './'  — Electron loads the app from file:///.../out/index.html, so absolute
+//      '/assets/...' URLs would resolve to file:///assets/... and 404.
+//   2. outDir <repoRoot>/out — electron-builder packs one self-contained folder that the
+//      web/CDN pipeline never sees; apps/web/dist keeps serving the normal web build.
+// Both are gated on BUILD_TARGET=desktop, so `npm run build:web` is byte-for-byte unchanged.
+const isDesktop = process.env.BUILD_TARGET === 'desktop';
+
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  base: isDesktop ? './' : '/',
   plugins: [react()],
+  // The renderer must not be able to reach the storefront by accident, so the desktop export gets
+  // a compile-time constant: `if (__ZT_DESKTOP__)` lets Rollup delete the catalogue branch (and the
+  // chunk it dynamically pulls) rather than shipping it and hiding it. Unset => false => web output
+  // is the same code path it always was.
+  define: { __ZT_DESKTOP__: JSON.stringify(isDesktop) },
   resolve: {
     alias: { '@zt/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)) },
   },
   server: { host: '0.0.0.0', allowedHosts: true },
   build: {
-    outDir: 'dist',
+    outDir: isDesktop ? fileURLToPath(new URL('../../out', import.meta.url)) : 'dist',
     emptyOutDir: true,
     target: 'es2022',
     sourcemap: false,

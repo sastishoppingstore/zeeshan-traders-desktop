@@ -1,21 +1,23 @@
 /** Settings, usage meter, offline sync/conflicts, encrypted backup, feature-status checklist. */
 import type { Hono } from 'hono';
-import type { AppEnv, AppVars } from '../context.js';
+import type { AppContext, AppEnv, AppVars } from '../context.js';
 import type { DB } from '../db.js';
 import {
   ok, fail, handle, me, audit, nowIso, requirePerm, getSetting, setSetting,
-  idempotentResult, BizError, purgePublicCache, getSetting as gs,
+  idempotentResult, BizError, purgePublicCache, getSetting as gs, assertRowVersion,
 } from '../context.js';
 import {
   settingsSchema, syncOperationSchema, saleSchema, purchaseSchema, receiptSchema,
   paymentSchema, expenseSchema, grainPurchaseSchema, grainSaleSchema, partySchema,
   ulid, karachiToday, encryptText,
 } from '@zt/shared';
+import type { SyncOperation } from '@zt/shared';
 import { postSale, postPurchase } from '../services/trade.js';
 import { postGrainSale, postGrainPurchase } from '../services/grains.js';
 import { postReceipt, postExpense } from '../services/money.js';
 import { postParty } from '../services/inventory.js';
 import { runIntegrity } from './reports.js';
+import { handleRowPush } from './syncRows.js';
 
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
@@ -29,7 +31,8 @@ export function registerOps(app: H) {
     return ok(c, out);
   }));
   app.put('/api/v1/settings', requirePerm('settings.write'), (c) => handle(c, async () => {
-    const body = settingsSchema.parse(await c.req.json());
+    const raw = await c.req.json();
+    const body = settingsSchema.parse(raw);
     const db = c.get('db')!;
     const allowed = new Set([
       'business', 'maund_kg', 'maund_confirmed', 'bag_sizes_confirmed', 'fiscal_year',
@@ -41,11 +44,14 @@ export function registerOps(app: H) {
       'backup_retention', 'hero_tagline', 'period_lock',
     ]);
     if (!allowed.has(body.key)) throw new BizError(400, 'SETTING_NOT_ALLOWED', 'یہ ترتیب قابلِ تبدیلی نہیں', 'Setting is not editable');
+    // business_settings is row-synced: a web tab holding an old version must not overwrite a newer
+    // edit made elsewhere. base_version is stripped by the schema, so it is read from the raw body.
+    const row = await assertRowVersion(db, 'business_settings', 'key', body.key, (raw as any)?.base_version);
     const before = await getSetting(db, body.key);
     await setSetting(db, body.key, body.value, me(c).id);
     await audit(db, 'UPDATE', 'business_settings', body.key, { user_id: me(c).id, before, after: body.value });
     await purgePublicCache();
-    return ok(c, { key: body.key });
+    return ok(c, { key: body.key, version: row ? Number(row.version) + 1 : 1 });
   }));
 
   // ------------------------------- Usage meter --------------------------------
@@ -72,35 +78,18 @@ export function registerOps(app: H) {
   app.get('/api/v1/sync/conflicts', requirePerm('sync.read'), (c) => handle(c, async () =>
     ok(c, await c.get('db')!.prepare('SELECT * FROM sync_conflicts ORDER BY created_at DESC LIMIT 100').all())));
 
+  // Same URL the web PWA already posts to, so no existing client has to be redeployed to keep
+  // working. `operations` = batch of document commands; `rows` = master data, delegated to the
+  // row-tier handler; anything else is the legacy single-op shape.
   app.post('/api/v1/sync/push', requirePerm('sync.read'), (c) => handle(c, async () => {
-    const op = syncOperationSchema.parse(await c.req.json());
-    const db = c.get('db')!;
-    const existing = await idempotentResult(db, op.idempotency_key);
-    if (existing) return ok(c, { status: 'SYNCED', id: existing.id, number: existing.number, duplicate: true });
-    const device = await db.prepare('SELECT revoked_at,user_id FROM devices WHERE id=?').bind(op.device_id).first<any>();
-    if (device?.revoked_at) throw new BizError(403, 'DEVICE_REVOKED', 'یہ ڈیوائس بند کر دی گئی ہے', 'Device revoked');
-    try {
-      const result = await dispatch(c, op.type, op.payload, op.idempotency_key, op.device_id);
-      return ok(c, { status: 'SYNCED', id: result.id, number: result.number ?? '' }, 201);
-    } catch (e) {
-      const err = e instanceof BizError ? e : null;
-      const conflictCodes = new Set(['INSUFFICIENT_STOCK', 'INSUFFICIENT_LOT_STOCK', 'PERIOD_CLOSED',
-        'PRODUCT_ARCHIVED', 'EXPIRED_BATCH', 'BATCH_QUARANTINED', 'MAUND_NOT_CONFIRMED', 'CONCURRENT_MODIFICATION']);
-      const isConflict = !!err && conflictCodes.has(err.code);
-      const opId = ulid();
-      await db.prepare(`INSERT INTO sync_operations (id,idempotency_key,device_id,user_id,type,payload_json,local_time,status,tries,error,created_at)
-        VALUES (?,?,?,?,?,?,?,?,1,?,?)`).bind(opId, op.idempotency_key, op.device_id, me(c).id,
-        op.type, JSON.stringify(op.payload), op.local_time, isConflict ? 'CONFLICT' : 'FAILED',
-        err?.en ?? String(e), nowIso()).run();
-      if (isConflict) {
-        const conflictId = ulid();
-        await db.prepare(`INSERT INTO sync_conflicts (id,operation_id,code,message_ur,details_json,status,created_at)
-          VALUES (?,?,?,?,?,'OPEN',?)`).bind(conflictId, opId, err!.code, err!.ur,
-          JSON.stringify({ payload: op.payload }), nowIso()).run();
-        return ok(c, { status: 'CONFLICT', conflict_id: conflictId, code: err!.code, message_ur: err!.ur }, 409);
-      }
-      return ok(c, { status: 'FAILED', code: err?.code ?? 'INTERNAL_ERROR', message_ur: err?.ur ?? String(e) }, 422);
+    const raw = await c.req.json() as any;
+    if (Array.isArray(raw?.operations)) {
+      return pushCommands(c, String(raw?.device_id ?? ''), raw.operations);
     }
+    if (Array.isArray(raw?.rows)) {
+      return handleRowPush(c, String(raw?.device_id ?? ''), raw.rows);
+    }
+    return applySyncOp(c, syncOperationSchema.parse(raw));
   }));
 
   app.post('/api/v1/sync/resolve/:id', requirePerm('sync.resolve'), (c) => handle(c, async () => {
@@ -174,7 +163,81 @@ export function registerOps(app: H) {
   }));
 }
 
-async function dispatch(c: any, type: string, payload: any, key: string, device: string): Promise<{ id: string; number?: string }> {
+/**
+ * Apply one queued document command. Extracted so `POST /sync/push` can take either the legacy
+ * single-op body or a batch, with identical accounting and conflict semantics for both.
+ * Never throws for a business rejection — that becomes a recorded CONFLICT/FAILED verdict, because
+ * one bad document must not stop the rest of a device's queue from syncing.
+ */
+async function applySyncOp(c: AppContext, op: SyncOperation): Promise<Response> {
+  const db = c.get('db')!;
+  const existing = await idempotentResult(db, op.idempotency_key);
+  if (existing) return ok(c, { status: 'SYNCED', id: existing.id, number: existing.number, duplicate: true });
+  const device = await db.prepare('SELECT revoked_at,user_id FROM devices WHERE id=?').bind(op.device_id).first<any>();
+  if (device?.revoked_at) throw new BizError(403, 'DEVICE_REVOKED', 'یہ ڈیوائس بند کر دی گئی ہے', 'Device revoked');
+  try {
+    const result = await dispatch(c, op.type, op.payload, op.idempotency_key, op.device_id);
+    return ok(c, { status: 'SYNCED', id: result.id, number: result.number ?? '' }, 201);
+  } catch (e) {
+    const err = e instanceof BizError ? e : null;
+    const conflictCodes = new Set(['INSUFFICIENT_STOCK', 'INSUFFICIENT_LOT_STOCK', 'PERIOD_CLOSED',
+      'PRODUCT_ARCHIVED', 'EXPIRED_BATCH', 'BATCH_QUARANTINED', 'MAUND_NOT_CONFIRMED', 'CONCURRENT_MODIFICATION']);
+    const isConflict = !!err && conflictCodes.has(err.code);
+    const opId = ulid();
+    await db.prepare(`INSERT INTO sync_operations (id,idempotency_key,device_id,user_id,type,payload_json,local_time,status,tries,error,created_at)
+      VALUES (?,?,?,?,?,?,?,?,1,?,?)`).bind(opId, op.idempotency_key, op.device_id, me(c).id,
+      op.type, JSON.stringify(op.payload), op.local_time, isConflict ? 'CONFLICT' : 'FAILED',
+      err?.en ?? String(e), nowIso()).run();
+    if (isConflict) {
+      const conflictId = ulid();
+      await db.prepare(`INSERT INTO sync_conflicts (id,operation_id,code,message_ur,details_json,status,created_at)
+        VALUES (?,?,?,?,?,'OPEN',?)`).bind(conflictId, opId, err!.code, err!.ur,
+        JSON.stringify({ payload: op.payload }), nowIso()).run();
+      return ok(c, { status: 'CONFLICT', conflict_id: conflictId, code: err!.code, message_ur: err!.ur,
+        idempotency_key: op.idempotency_key }, 409);
+    }
+    return ok(c, { status: 'FAILED', code: err?.code ?? 'INTERNAL_ERROR', message_ur: err?.ur ?? String(e),
+      idempotency_key: op.idempotency_key }, 422);
+  }
+}
+
+const MAX_COMMAND_BATCH = 50;
+
+/**
+ * Batch form of the same endpoint: `{ device_id, operations: [{idempotency_key,type,payload,local_time}] }`.
+ * Each operation is applied on its own, so a rejected sale never blocks the receipts behind it.
+ * An unexpected (non-BizError) throw is still recorded per operation rather than aborting the loop.
+ */
+async function pushCommands(c: AppContext, deviceId: string, operations: unknown[]): Promise<Response> {
+  if (!deviceId) throw new BizError(400, 'DEVICE_REQUIRED', 'ڈیوائس شناخت درکار ہے', 'device_id is required for a batch push');
+  if (operations.length > MAX_COMMAND_BATCH) {
+    throw new BizError(413, 'BATCH_TOO_LARGE', `ایک بار میں زیادہ سے زیادہ ${MAX_COMMAND_BATCH} دستاویزات`, `Max ${MAX_COMMAND_BATCH} operations per push`);
+  }
+  const results: Record<string, unknown>[] = [];
+  for (const raw of operations) {
+    let op: SyncOperation;
+    try {
+      op = syncOperationSchema.parse({ device_id: deviceId, ...(raw as object) });
+    } catch (e) {
+      results.push({ idempotency_key: String((raw as Record<string, unknown>)?.idempotency_key ?? ''), status: 'FAILED',
+        code: 'VALIDATION_ERROR', message: e instanceof Error ? e.message : String(e) });
+      continue;
+    }
+    try {
+      const res = await applySyncOp(c, op);
+      const body = await res.json() as any;
+      results.push({ idempotency_key: op.idempotency_key, http: res.status, ...(body?.data ?? {}) });
+    } catch (e) {
+      // A hard failure (DB down, revoked device) is reported per operation and the loop continues,
+      // so one poisoned record cannot wedge a device's whole queue.
+      results.push({ idempotency_key: op.idempotency_key, status: 'FAILED',
+        code: e instanceof BizError ? e.code : 'INTERNAL_ERROR', message: String(e) });
+    }
+  }
+  return ok(c, { results });
+}
+
+async function dispatch(c: AppContext, type: string, payload: any, key: string, device: string): Promise<{ id: string; number?: string }> {
   const withKey = { ...payload, idempotency_key: key, offline: true };
   switch (type) {
     case 'SALE': return postSale(c, saleSchema.parse(withKey));

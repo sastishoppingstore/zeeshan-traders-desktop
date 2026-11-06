@@ -7,7 +7,7 @@ import type { Hono } from 'hono';
 import type { AppEnv, AppVars } from '../context.js';
 import {
   ok, fail, handle, me, audit, nowIso, today, requirePerm, BizError,
-  rateLimit, clientIp, verifyTurnstile, setSetting,
+  rateLimit, clientIp, verifyTurnstile, setSetting, assertRowVersion,
 } from '../context.js';
 import {
   checkoutSchema, paymentMethodSchema, proofSchema, orderDecisionSchema, orderRejectSchema,
@@ -20,7 +20,7 @@ import type { DB } from '../db.js';
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
 const PROOF_TYPES = ['webp', 'jpeg', 'jpg', 'png'];
-const QR_TYPES = ['webp', 'png'];
+const QR_TYPES = ['webp', 'jpeg', 'jpg', 'png', 'avif'];
 
 /** Never leaks a hashed token, an access token, or internal ids the customer has no use for. */
 function publicOrderView(row: any, items: any[] = [], proofs: any[] = []) {
@@ -51,9 +51,10 @@ async function loadOrder(db: DB, id: string) {
 
 /** Money books are addressed by id or code ('CASH', 'MEEZAN'); always store the resolved id. */
 async function normalizeAccount(db: DB, ref?: string | null): Promise<string | null> {
-  if (!ref) return null;
+  if (!ref || !ref.trim()) return null;
+  const val = ref.trim();
   const row = await db.prepare('SELECT id FROM financial_accounts WHERE (id=? OR code=?) AND is_active=1')
-    .bind(ref, ref).first<{ id: string }>();
+    .bind(val, val).first<{ id: string }>();
   if (!row) throw new BizError(400, 'ACCOUNT_NOT_FOUND', 'کھاتہ نہیں ملا', `Ledger account not found: ${ref}`);
   return row.id;
 }
@@ -84,27 +85,42 @@ export function registerCheckout(app: H) {
     }
     const body = checkoutSchema.parse(raw);
 
-    const method = await db.prepare('SELECT * FROM payment_methods WHERE id=? AND is_active=1')
+    let method = await db.prepare('SELECT * FROM payment_methods WHERE id=? AND is_active=1 AND deleted=0')
       .bind(body.payment_method_id).first<any>();
-    if (!method) throw new BizError(400, 'PAYMENT_METHOD_INVALID', 'ادائیگی کا طریقہ منتخب کریں', 'Choose a valid payment method');
+    if (!method) {
+      method = await db.prepare('SELECT * FROM payment_methods WHERE is_active=1 AND deleted=0 ORDER BY sort LIMIT 1').first<any>();
+    }
+    if (!method) {
+      const at = nowIso();
+      const defMethodId = ulid();
+      await db.prepare(`INSERT INTO payment_methods (id,kind,title_ur,title_en,bank_name,account_title,account_number,iban,mobile_number,instructions_ur,qr_key,sort,is_active,is_system,created_at,updated_at,version,deleted)
+        VALUES (?,'CASH','کیش آن ڈیلیوری','Cash on Delivery','Cash','Default','','','','سامان پہنچنے پر رقم ادا کریں۔','',0,1,1,?,?,1,0)`).bind(defMethodId, at, at).run();
+      method = { id: defMethodId, title_ur: 'کیش آن ڈیلیوری', title_en: 'Cash on Delivery', kind: 'CASH' };
+    }
 
     // Prices come from the catalogue only — a client-sent price is never read.
     const priced: { product: any; qty_milli: number; rate_paisa: number; line_total_paisa: number }[] = [];
     for (const line of body.items) {
       const p = await db.prepare(`SELECT id,name_ur,base_unit,is_published,is_active,show_public_price,
-        public_price_paisa,availability_mode FROM products WHERE id=?`).bind(line.product_id).first<any>();
+        public_price_paisa,sale_rate_paisa,availability_mode FROM products WHERE id=? AND deleted=0`).bind(line.product_id).first<any>();
       if (!p || !p.is_published || !p.is_active) {
         throw new BizError(409, 'PRODUCT_UNAVAILABLE', 'منتخب مصنوعات اب دستیاب نہیں', 'A selected product is no longer available');
       }
-      if (!p.show_public_price || !p.public_price_paisa) {
+      const isPublicPrice = Boolean(p.show_public_price);
+      const rate = Number(p.public_price_paisa) || (isPublicPrice ? Number(p.sale_rate_paisa) : 0);
+      if (!isPublicPrice || !rate) {
         throw new BizError(409, 'PRICE_ON_CALL', `${p.name_ur}: قیمت فون پر پوچھیں، آن لائن آرڈر ممکن نہیں`,
           `${p.name_ur} has no published price — order it by phone or enquiry`);
       }
-      const rate = p.public_price_paisa as number;
       priced.push({ product: p, qty_milli: line.qty_milli, rate_paisa: rate, line_total_paisa: lineAmount(line.qty_milli, rate) });
     }
+    if (priced.length === 0) {
+      throw new BizError(400, 'EMPTY_ORDER', 'کم از کم ایک دستیاب پروڈکٹ منتخب کریں', 'Please select at least one available product');
+    }
     const total = sumPaisa(priced.map((l) => l.line_total_paisa));
-    if (total <= 0) throw new BizError(400, 'EMPTY_ORDER', 'آرڈر خالی ہے', 'Order has no value');
+    if (total <= 0) {
+      throw new BizError(400, 'EMPTY_ORDER', 'آرڈر خالی ہے', 'Order has no value');
+    }
 
     const seq = await db.prepare('SELECT prefix,next_value FROM invoice_sequences WHERE code=?').bind('ORDER').first<any>();
     const number = seqNumber(seq?.prefix ?? 'OD', seq?.next_value ?? 1);
@@ -302,7 +318,7 @@ export function registerCheckout(app: H) {
   // ----------------------------- Admin: payment methods -----------------------------
   app.get('/api/v1/payment-methods', requirePerm('orders.read'), (c) => handle(c, async () => {
     const db = c.get('db')!;
-    const rows = await db.prepare('SELECT * FROM payment_methods ORDER BY sort,title_ur').all<any>();
+    const rows = await db.prepare('SELECT * FROM payment_methods WHERE deleted=0 ORDER BY sort,title_ur').all<any>();
     return ok(c, rows.map((r) => ({ ...r, is_active: !!r.is_active, qr_url: r.qr_key ? `/media/${r.qr_key}` : '' })));
   }));
 
@@ -326,30 +342,46 @@ export function registerCheckout(app: H) {
 
   app.put('/api/v1/payment-methods/:id', requirePerm('payments.methods.write'), (c) => handle(c, async () => {
     const db = c.get('db')!;
-    const body = paymentMethodSchema.parse(await c.req.json());
-    const before = await db.prepare('SELECT * FROM payment_methods WHERE id=?').bind(c.req.param('id')).first<any>();
+    const raw = await c.req.json();
+    const body = paymentMethodSchema.parse(raw);
+    const before = await assertRowVersion(db, 'payment_methods', 'id', c.req.param('id'), (raw as any)?.base_version);
     if (!before) return fail(c, 404, 'NOT_FOUND', 'طریقہ نہیں ملا', 'Payment method not found');
     const at = nowIso();
-    await db.prepare(`UPDATE payment_methods SET kind=?,title_ur=?,title_en=?,bank_name=?,account_title=?,account_number=?,
-      iban=?,mobile_number=?,instructions_ur=?,account_id=?,is_active=?,sort=?,updated_at=?,updated_by=?,version=version+1 WHERE id=?`)
+    const r = await db.prepare(`UPDATE payment_methods SET kind=?,title_ur=?,title_en=?,bank_name=?,account_title=?,account_number=?,
+      iban=?,mobile_number=?,instructions_ur=?,account_id=?,is_active=?,sort=?,updated_at=?,updated_by=?,version=version+1
+      WHERE id=? AND version=?`)
       .bind(body.kind, body.title_ur, body.title_en, body.bank_name, body.account_title, body.account_number,
         body.iban, body.mobile_number, body.instructions_ur, await normalizeAccount(db, body.account_id),
-        body.is_active ? 1 : 0, body.sort, at, me(c).id, before.id).run();
+        body.is_active ? 1 : 0, body.sort, at, me(c).id, before.id, before.version).run();
+    if (r.changes !== 1) {
+      const current = await db.prepare('SELECT * FROM payment_methods WHERE id=?').bind(before.id).first<any>();
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ طریقہ تبدیل کیا ہے — دوبارہ لوڈ کریں',
+        'This payment method changed elsewhere — reload', undefined, current ?? before);
+    }
     await audit(db, 'UPDATE', 'payment_methods', before.id, { user_id: me(c).id, before, after: body });
-    return ok(c, { id: before.id });
+    return ok(c, { id: before.id, version: before.version + 1 });
   }));
 
   app.delete('/api/v1/payment-methods/:id', requirePerm('payments.methods.write'), (c) => handle(c, async () => {
     const db = c.get('db')!;
-    const used = await db.prepare('SELECT COUNT(*) n FROM orders WHERE payment_method_id=?').bind(c.req.param('id')).first<{ n: number }>();
+    const id = c.req.param('id');
+    const before = await assertRowVersion(db, 'payment_methods', 'id', id, c.req.query('base_version'));
+    if (!before) return fail(c, 404, 'NOT_FOUND', 'طریقہ نہیں ملا', 'Payment method not found');
+    const used = await db.prepare('SELECT COUNT(*) n FROM orders WHERE payment_method_id=?').bind(id).first<{ n: number }>();
     if ((used?.n ?? 0) > 0) {
       // Historical orders snapshot the title, but the FK must keep pointing at a real row.
-      await db.prepare('UPDATE payment_methods SET is_active=0,updated_at=? WHERE id=?').bind(nowIso(), c.req.param('id')).run();
-      return ok(c, { id: c.req.param('id'), deactivated: true });
+      await db.prepare('UPDATE payment_methods SET is_active=0,updated_at=?,version=version+1 WHERE id=?')
+        .bind(nowIso(), id).run();
+      return ok(c, { id, deactivated: true });
     }
-    await db.prepare('DELETE FROM payment_methods WHERE id=?').bind(c.req.param('id')).run();
-    await audit(db, 'DELETE', 'payment_methods', c.req.param('id'), { user_id: me(c).id });
-    return ok(c, { id: c.req.param('id'), deleted: true });
+    // Soft delete, never a hard one: every other device learns about the removal from the
+    // tombstone that /api/v1/sync/pull keeps returning. A DELETE would vanish from the delta and
+    // leave the row alive forever on the offline PCs.
+    await db.prepare('UPDATE payment_methods SET deleted=1,is_active=0,updated_at=?,version=version+1 WHERE id=?')
+      .bind(nowIso(), id).run();
+    await audit(db, 'DELETE', 'payment_methods', id, { user_id: me(c).id });
+    return ok(c, { id, deleted: true });
   }));
 
   app.post('/api/v1/payment-methods/:id/qr', requirePerm('payments.methods.write'), (c) => handle(c, async () => {
@@ -381,7 +413,7 @@ export function registerCheckout(app: H) {
   app.get('/api/v1/orders-meta/checkout-ready', requirePerm('orders.read'), (c) => handle(c, async () => {
     const db = c.get('db')!;
     const methods = await db.prepare('SELECT COUNT(*) n FROM payment_methods WHERE is_active=1').first<{ n: number }>();
-    const priced = await db.prepare('SELECT COUNT(*) n FROM products WHERE is_published=1 AND is_active=1 AND show_public_price=1 AND public_price_paisa>0').first<{ n: number }>();
+    const priced = await db.prepare('SELECT COUNT(*) n FROM products WHERE deleted=0 AND is_published=1 AND is_active=1 AND show_public_price=1 AND public_price_paisa>0').first<{ n: number }>();
     const pending = await db.prepare("SELECT COUNT(*) n FROM orders WHERE status IN ('NEW','UNDER_REVIEW')").first<{ n: number }>();
     return ok(c, {
       payment_methods: methods?.n ?? 0,

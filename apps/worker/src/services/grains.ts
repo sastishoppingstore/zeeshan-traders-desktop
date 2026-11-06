@@ -166,6 +166,11 @@ export async function postGrainSale(c: AppContext, input: GrainSaleInput) {
     const id = ulid();
     const productId = await ensureGrainProduct({ db, posting: p, crop: input.crop, crop_ur: cropUr });
     const state = await p.stockState(productId);
+    // Same classification as stockOut(): cogsAtWeightedAverage() throws a bare Error, which the
+    // offline sync route cannot tell apart from a bug. Raise the typed conflict first.
+    if (input.net_grams > state.qty_milli) {
+      throw new BizError(409, 'INSUFFICIENT_STOCK', `${cropUr}: اسٹاک ناکافی ہے`, `Insufficient stock for ${cropUr}`);
+    }
     const cogs = state.qty_milli > 0 ? cogsAtWeightedAverage(state.value_paisa, state.qty_milli, input.net_grams) : 0;
     const party = await resolveParty({ db, posting: p, party_id: input.party_id, name: input.party_name,
       phone: input.party_phone, address: input.village, type: 'CUSTOMER' });

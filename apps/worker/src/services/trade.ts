@@ -184,7 +184,7 @@ async function prepareSaleLines(c: AppContext, input: SaleInput) {
     if (lineTotal < 0) throw new BizError(400, 'NEGATIVE_LINE', 'لائن کی رقم منفی ہے', 'Line total cannot be negative');
     const stock = await db.prepare('SELECT qty_milli,value_paisa FROM stock_balance WHERE product_id=? AND warehouse_id=?')
       .bind(l.product_id, 'wh-main').first<{ qty_milli: number; value_paisa: number }>();
-    if (!negativeAllowed && (stock?.qty_milli ?? 0) < l.qty_milli) {
+    if (!negativeAllowed && !input.offline && (stock?.qty_milli ?? 0) < l.qty_milli) {
       throw new BizError(409, 'INSUFFICIENT_STOCK', `${product.name_ur}: اسٹاک ناکافی ہے`, `Insufficient stock for ${product.name_ur}`);
     }
     lines.push({
@@ -213,7 +213,7 @@ export async function postSale(c: AppContext, input: SaleInput) {
   if (input.book_code === 'FERT' && requireFertCnic && !input.cnic) {
     throw new BizError(400, 'CNIC_REQUIRED', 'کھاد کی فروخت کے لیے شناختی کارڈ نمبر لازمی ہے', 'CNIC required by settings');
   }
-  const { lines, subtotal, total } = await prepareSaleLines(c, input);
+  const { lines, subtotal, total, negativeAllowed } = await prepareSaleLines(c, input);
   const payments = await resolvePayments(db, input.payments, total);
   const paid = sumPaisa(payments.map((p) => p.amount_paisa));
   const due = total - paid;
@@ -242,6 +242,15 @@ export async function postSale(c: AppContext, input: SaleInput) {
     for (const [k, st] of p.stock) sim.set(k, { qty_milli: st.qty_milli, value_paisa: st.value_paisa });
     for (const l of lines) {
       const st = sim.get(`${l.product_id}|${p.warehouse_id}`)!;
+      // An offline document skips the stock guard in prepareSaleLines (the shop must be able to keep
+      // billing while disconnected), so the shortage has to be caught here instead. cogsAtWeighted-
+      // Average() below throws a bare Error, which the sync route cannot classify; raising the same
+      // BizError(409, INSUFFICIENT_STOCK) the online path uses keeps the two paths identical and lets
+      // the offline queue park the op as a CONFLICT rather than an opaque FAILED.
+      if (!negativeAllowed && st.qty_milli < l.qty_milli) {
+        throw new BizError(409, 'INSUFFICIENT_STOCK',
+          `${l.product.name_ur}: اسٹاک ناکافی ہے`, `Insufficient stock for ${l.product.name_ur}`);
+      }
       const cost = st.qty_milli > 0 ? cogsAtWeightedAverage(st.value_paisa, st.qty_milli, l.qty_milli) : 0;
       l.cost_total_paisa = cost;
       l.unit_cost_paisa = l.qty_milli > 0 ? Math.floor(cost * 1000 / l.qty_milli) : 0;

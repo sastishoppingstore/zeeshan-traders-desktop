@@ -311,10 +311,14 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
           e.currentTarget.select();
         }}
         onChange={(e) => {
-          setQ(e.target.value);
+          const val = e.target.value;
+          setQ(val);
           setOpen(true);
-          if (value && e.target.value !== selected?.label) {
+          if (value && val !== selected?.label) {
             onChange('');
+          }
+          if (onCreate) {
+            onCreate(val);
           }
         }}
         aria-invalid={!!error}
@@ -322,7 +326,7 @@ export function Combobox({ label, value, onChange, options, onCreate, placeholde
       {q && (
         <button
           type="button"
-          onClick={() => { setQ(''); onChange(''); setOpen(true); }}
+          onClick={() => { setQ(''); onChange(''); if (onCreate) onCreate(''); setOpen(true); }}
           style={{
             position: 'absolute',
             insetInlineEnd: 10,

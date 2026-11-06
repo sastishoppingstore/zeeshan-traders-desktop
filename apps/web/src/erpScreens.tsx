@@ -1,7 +1,7 @@
 /** ERP screens ERP-01..38. Each screen reads a real Worker endpoint and has loading/empty/error/offline states. */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useGet, api, downloadCsv } from './api.js';
+import { useGet, api, downloadCsv, ZtError } from './api.js';
 import { useApp, ztdb } from './app-state.js';
 import { passkeysSupported, registerPasskey, revokePasskey } from './passkeys.js';
 import { usePinState, enablePin, disablePin, lockPin, PIN_ITERATIONS } from './offline-security.js';
@@ -109,8 +109,12 @@ export function GenericList({ config }: { config: any }) {
   </div>;
 }
 
-/** ERP-02 quick actions — 3D boxes for Fertilizer Sale, Purchase, Grains, Receive/Pay Money, Expense (no photos). */
+/** ERP-02 quick actions — 3D boxes for Add Product, Orders, Fertilizer Sale, Purchase, Grains, etc. */
 const DASH_QUICK: { to: string; ur: string; en: string; badge: string }[] = [
+  { to: '/erp/products/new', ur: 'نئی پروڈکٹ شامل کریں', en: 'Add New Product', badge: '+ PRODUCT' },
+  { to: '/erp/orders', ur: 'آن لائن آرڈرز', en: 'Online Orders', badge: 'ORDERS' },
+  { to: '/erp/sales/new', ur: 'فروخت انوائس', en: 'Sale Invoice', badge: 'SALE' },
+  { to: '/erp/purchases/new', ur: 'خریداری انوائس', en: 'Purchase Invoice', badge: 'PURCHASE' },
   { to: '/erp/fertilizer/sale/new?quick=1', ur: 'کھاد فروخت', en: 'Fertilizer Sale', badge: 'FERT SALE' },
   { to: '/erp/fertilizer/purchase/new?quick=1', ur: 'کھاد خرید', en: 'Fertilizer Purchase', badge: 'FERT PURCH' },
   { to: '/erp/grains', ur: 'اجناس', en: 'Grains', badge: 'MANDI GRAIN' },
@@ -138,6 +142,9 @@ export function Dashboard() {
     <div className="stats-grid">
       <StatCard label={lang === 'ur' ? 'آج کی فروخت' : "Today's Sales"} value={formatPKR(d?.today?.sales_paisa ?? 0)} tone="var(--primary)" />
       <StatCard label={lang === 'ur' ? 'آج کی خرید' : "Today's Purchases"} value={formatPKR(d?.today?.purchases_paisa ?? 0)} />
+      <StatCard label={lang === 'ur' ? 'آن لائن آرڈرز' : 'Online Orders'} value={lang === 'ur' ? `${d?.counts?.pending_orders ?? 0} نئے / ${d?.counts?.total_orders ?? 0} کل` : `${d?.counts?.pending_orders ?? 0} New / ${d?.counts?.total_orders ?? 0} Total`} tone="var(--brand-600)" />
+      <StatCard label={lang === 'ur' ? 'کل پروڈکٹس' : 'Total Products'} value={lang === 'ur' ? `${d?.counts?.total_products ?? 0} آئٹمز` : `${d?.counts?.total_products ?? 0} Items`} />
+      <StatCard label={lang === 'ur' ? 'اسٹاک مالیت' : 'Stock Value'} value={formatPKR(d?.counts?.total_stock_value ?? 0)} />
       <StatCard label={lang === 'ur' ? 'وصولیاں' : 'Collections'} value={formatPKR(d?.today?.collections_paisa ?? 0)} />
       <StatCard label={lang === 'ur' ? 'ادائیگیاں' : 'Payments'} value={formatPKR(d?.today?.payments_paisa ?? 0)} />
       <StatCard label={lang === 'ur' ? 'اخراجات' : 'Expenses'} value={formatPKR(d?.today?.expenses_paisa ?? 0)} tone="var(--danger)" />
@@ -207,56 +214,207 @@ export function Dashboard() {
 
 // -------------------------------- Product form -------------------------------
 const PRODUCT_DEFAULT: any = {
-  name_ur: '', name_en: '', category_id: '', brand_id: null, sku: '', barcode: '', slug: '',
-  description_ur: '', description_en: '', base_unit: 'kg', purchase_unit: 'kg', sale_unit: 'kg',
-  conversion_ratio_milli: 1000, grams_per_base_unit: 0, track_batch: false, track_expiry: false,
-  is_pesticide: false, reorder_level_milli: 0, purchase_rate_paisa: 0, sale_rate_paisa: 0,
-  tax_pct_milli: 0, show_public_price: false, public_price_paisa: 0, availability_mode: 'AUTO',
-  is_published: false, is_featured: false, is_active: true, seo_title: '', seo_description: '', season: 'NONE',
+  name_ur: '', name_en: '', category_id: '', brand_id: null, sku: '',
+  initial_stock_qty: '', purchase_rate_paisa: 0, sale_rate_paisa: 0, public_price_paisa: 0,
+  seo_title: '', seo_description: '', description_ur: '', description_en: '',
+  base_unit: 'piece', purchase_unit: 'piece', sale_unit: 'piece', conversion_ratio_milli: 1000,
+  show_public_price: true, is_published: true, is_featured: false, is_active: true,
 };
+
 export function ProductForm() {
   const { id } = useParams();
   const nav = useNavigate();
   const { can, toast, t, lang } = useApp();
-  const [tab, setTab] = useState('basic');
   const [p, setP] = useState<any>(PRODUCT_DEFAULT);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [saved, setSaved] = useState(false);
   const cats = useGet<any[]>('categories-ref', '/api/v1/categories');
   const brands = useGet<any[]>('brands-ref', '/api/v1/brands');
   const existing = useGet<any>('product', id ? `/api/v1/products/${id}` : null);
+  const [pendingImages, setPendingImages] = useState<{ file: File; data_url: string; name: string }[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
-  useEffect(() => { if (existing.data) setP({ ...PRODUCT_DEFAULT, ...existing.data }); }, [existing.data]);
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [newBrandUr, setNewBrandUr] = useState('');
+  const [newBrandEn, setNewBrandEn] = useState('');
+  const [newBrandBusy, setNewBrandBusy] = useState(false);
+  const [newBrandErr, setNewBrandErr] = useState('');
+
+  useEffect(() => {
+    if (existing.data) {
+      const e = { ...existing.data };
+      e.show_public_price = true;
+      e.is_published = true;
+      e.is_active = true;
+      if (e.stock_milli !== undefined && !e.initial_stock_qty) {
+        e.initial_stock_qty = e.stock_milli ? String(Math.round(e.stock_milli / 1000)) : '';
+      }
+      setP({ ...PRODUCT_DEFAULT, ...e });
+    }
+  }, [existing.data]);
+
   const set = (k: string, v: any) => { setP((x: any) => ({ ...x, [k]: v })); setSaved(false); };
+
+  const handleAddBrand = async () => {
+    const ur = newBrandUr.trim() || newBrandEn.trim() || 'نیا برانڈ';
+    const en = newBrandEn.trim() || ur;
+    setNewBrandBusy(true); setNewBrandErr('');
+    try {
+      const res = await api<any>('/api/v1/brands', {
+        method: 'POST',
+        body: { name_ur: ur, name_en: en, is_active: true }
+      });
+      await brands.refetch();
+      set('brand_id', res.id);
+      toast(lang === 'ur' ? 'نیا برانڈ شامل ہو گیا' : 'Brand added successfully');
+      setShowBrandModal(false);
+      setNewBrandUr(''); setNewBrandEn('');
+    } catch (e: any) {
+      setNewBrandErr(e.message_ur ?? e.message ?? String(e));
+    } finally {
+      setNewBrandBusy(false);
+    }
+  };
+
+  const handleMultipleImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const loaded: { file: File; data_url: string; name: string }[] = [];
+    for (const f of files) {
+      if (!f.type.startsWith('image/')) continue;
+      const data_url = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result));
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      });
+      loaded.push({ file: f, data_url, name: f.name });
+    }
+    if (id) {
+      setUploadBusy(true);
+      try {
+        await api('/api/v1/images', {
+          method: 'POST',
+          body: {
+            product_id: id,
+            images: loaded.map((l) => ({ data_url: l.data_url, alt_ur: p.name_ur || 'تصویر' }))
+          }
+        });
+        toast(lang === 'ur' ? 'تصاویر اپ لوڈ ہو گئیں' : 'Images uploaded');
+        existing.refetch();
+      } catch (e: any) {
+        setErr(e.message_ur ?? String(e));
+      } finally {
+        setUploadBusy(false);
+      }
+    } else {
+      setPendingImages((prev) => [...prev, ...loaded]);
+    }
+    e.target.value = '';
+  };
+
+  const removePendingImage = (index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const deleteExistingImage = async (imgId: string) => {
+    try {
+      await api(`/api/v1/images/${imgId}`, { method: 'DELETE' });
+      toast(lang === 'ur' ? 'تصویر ہٹا دی گئی' : 'Image removed');
+      existing.refetch();
+    } catch (e: any) {
+      setErr(e.message_ur ?? String(e));
+    }
+  };
+
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      const body: any = { ...p };
-      if (!body.name_ur || !body.category_id || !body.base_unit || !body.purchase_unit || !body.sale_unit || body.conversion_ratio_milli <= 0) {
-        throw new Error(lang === 'ur' ? 'نام، زمرہ، یونٹس اور کنورژن لازمی ہیں' : 'Name, category, units and conversion ratio are required');
+      let nameUr = p.name_ur ? String(p.name_ur).trim() : '';
+      let nameEn = p.name_en ? String(p.name_en).trim() : '';
+      if (!nameUr && nameEn) nameUr = nameEn;
+      if (!nameEn && nameUr) nameEn = nameUr;
+      if (!nameUr) nameUr = lang === 'ur' ? 'نئی پروڈکٹ' : 'New Product';
+
+      let catId = p.category_id && String(p.category_id).trim() ? String(p.category_id).trim() : '';
+      if (!catId && cats.data?.length) catId = cats.data[0].id;
+
+      const brandIdVal = p.brand_id && String(p.brand_id).trim() && String(p.brand_id).trim() !== '—'
+        ? String(p.brand_id).trim()
+        : null;
+
+      const saleRate = Number(p.sale_rate_paisa) || 0;
+      const purchRate = Number(p.purchase_rate_paisa) || 0;
+      const publicPrice = (Number(p.public_price_paisa) > 0 ? Number(p.public_price_paisa) : saleRate);
+      const initQty = Number(p.initial_stock_qty) || 0;
+
+      const body: any = {
+        name_ur: nameUr,
+        name_en: nameEn,
+        category_id: catId,
+        brand_id: brandIdVal,
+        sku: p.sku ? String(p.sku).trim() : '',
+        description_ur: p.description_ur || '',
+        description_en: p.description_en || p.description_ur || '',
+        seo_title: p.seo_title || nameUr,
+        seo_description: p.seo_description || p.description_ur || '',
+        base_unit: p.base_unit || 'piece',
+        purchase_unit: p.purchase_unit || 'piece',
+        sale_unit: p.sale_unit || 'piece',
+        conversion_ratio_milli: 1000,
+        purchase_rate_paisa: purchRate,
+        sale_rate_paisa: saleRate,
+        public_price_paisa: publicPrice,
+        initial_stock_qty: initQty,
+        show_public_price: true,
+        is_published: true,
+        is_active: true,
+        is_featured: !!p.is_featured,
+      };
+
+      let productId = id;
+      if (id) {
+        // Optimistic lock: the version the form was loaded with. A stale tab gets a 409 with the
+        // server's current row instead of silently overwriting someone else's edit.
+        body.base_version = p.version ?? existing.data?.version;
+        await api(`/api/v1/products/${id}`, { method: 'PUT', body });
+      } else {
+        const res = await api<any>('/api/v1/products', { method: 'POST', body });
+        productId = res.id;
       }
-      if (id) await api(`/api/v1/products/${id}`, { method: 'PUT', body });
-      else await api('/api/v1/products', { method: 'POST', body });
-      toast(lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved successfully'); setSaved(true); nav('/erp/products');
-    } catch (e: any) { setErr(e.message_ur ?? e.message ?? String(e)); } finally { setBusy(false); }
+
+      if (productId && pendingImages.length > 0) {
+        try {
+          await api('/api/v1/images', {
+            method: 'POST',
+            body: {
+              product_id: productId,
+              images: pendingImages.map((img) => ({ data_url: img.data_url, alt_ur: nameUr }))
+            }
+          });
+        } catch { /* proceed */ }
+      }
+
+      toast(lang === 'ur' ? 'مصنوعات کامیابی سے محفوظ ہو گئیں' : 'Product saved successfully');
+      setSaved(true);
+      nav('/erp/products');
+    } catch (e: any) {
+      setErr(e.message_ur ?? e.message ?? String(e));
+      // 409 — another device edited this product first. The server sent its current row: show it and
+      // refetch so the shop sees the latest values and can reapply their change on top.
+      if (e instanceof ZtError && e.isVersionConflict) {
+        const current = e.current as any;
+        if (current) setP({ ...PRODUCT_DEFAULT, ...current, show_public_price: true, is_published: true, is_active: true });
+        void existing.refetch();
+      }
+    } finally {
+      setBusy(false);
+    }
   };
-  const upload = async (file: File) => {
-    if (!id) { setErr(lang === 'ur' ? 'تصویر شامل کرنے سے پہلے مصنوعات محفوظ کریں' : 'Save product before uploading image'); return; }
-    setUploadBusy(true);
-    try {
-      const dataUrl = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(file); });
-      await api('/api/v1/images', { method: 'POST', body: { product_id: id, data_url: dataUrl, alt_ur: p.name_ur } });
-      toast(lang === 'ur' ? 'تصویر محفوظ' : 'Image saved'); existing.refetch();
-    } catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setUploadBusy(false); }
-  };
+
   if (!can('products.write')) return <div className="permission"><Mark kind="ban" /> {t('permissionDenied')}</div>;
   if (id && existing.isLoading) return <Skeleton rows={5} />;
-  const tabs = [
-    { id: 'basic', label: lang === 'ur' ? 'بنیادی' : 'Basic' },
-    { id: 'pricing', label: lang === 'ur' ? 'قیمتیں' : 'Pricing' },
-    { id: 'stock', label: lang === 'ur' ? 'اسٹاک' : 'Stock' },
-    { id: 'web', label: lang === 'ur' ? 'ویب / SEO' : 'Web / SEO' },
-    { id: 'images', label: lang === 'ur' ? 'تصاویر' : 'Images' }
-  ];
+
+  const existingImages = existing.data?.images ?? [];
+
   return <div>
     <div className="between">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -264,76 +422,144 @@ export function ProductForm() {
           aria-label={lang === 'ur' ? 'پیچھے جائیں' : 'Back'}>
           <span className="back-arrow">{lang === 'ur' ? '›' : '‹'}</span> {lang === 'ur' ? 'واپس' : 'Back'}
         </button>
-        <h1>{id ? (lang === 'ur' ? `مصنوعات: ${p.name_ur || ''}` : `Product: ${p.name_en || p.name_ur || ''}`) : (lang === 'ur' ? 'نئی مصنوعات' : 'New Product')}</h1>
+        <h1>{id ? (lang === 'ur' ? `مصنوعات میں ترمیم: ${p.name_ur || ''}` : `Edit Product: ${p.name_en || p.name_ur || ''}`) : (lang === 'ur' ? 'نئی مصنوعات شامل کریں' : 'Add New Product')}</h1>
       </div>
-    </div>
-    <Tabs tabs={tabs} active={tab} onChange={setTab} />
-    <div className="card">
-      {tab === 'basic' && <div className="grid g2">
-        <TextField label={lang === 'ur' ? 'نام (اردو)' : 'Name (Urdu)'} value={p.name_ur} onChange={(v) => set('name_ur', v)} required />
-        <TextField label={lang === 'ur' ? 'نام (English)' : 'Name (English)'} value={p.name_en} onChange={(v) => set('name_en', v)} dir="ltr" />
-        <SelectField label={lang === 'ur' ? 'زمرہ' : 'Category'} value={p.category_id} onChange={(v) => set('category_id', v)} required placeholder={lang === 'ur' ? 'منتخب کریں' : 'Select Category'}
-          options={(cats.data ?? []).map((c: any) => ({ value: c.id, label: `${lang === 'ur' ? c.name_ur : (c.name_en || c.name_ur)} (${c.code})` }))} />
-        <SelectField label={lang === 'ur' ? 'برانڈ' : 'Brand'} value={p.brand_id ?? ''} onChange={(v) => set('brand_id', v || null)} placeholder="—"
-          options={(brands.data ?? []).map((b: any) => ({ value: b.id, label: lang === 'ur' ? b.name_ur : (b.name_en || b.name_ur) }))} />
-        <TextField label="SKU" value={p.sku} onChange={(v) => set('sku', v)} />
-        <TextField label={lang === 'ur' ? 'بار کوڈ' : 'Barcode'} value={p.barcode} onChange={(v) => set('barcode', v)} />
-        <TextField label="Slug" value={p.slug} onChange={(v) => set('slug', v)} dir="ltr" helper={lang === 'ur' ? 'خالی چھوڑیں تو نام سے بنے گا' : 'Leave empty to auto-generate from name'} />
-        <SelectField label={lang === 'ur' ? 'سیزن' : 'Season'} value={p.season} onChange={(v) => set('season', v)}
-          options={[{ value: 'NONE', label: '—' }, { value: 'KHARIF', label: lang === 'ur' ? 'خریف' : 'Kharif' }, { value: 'RABI', label: lang === 'ur' ? 'ربی' : 'Rabi' }]} />
-        <Field label={lang === 'ur' ? 'تفصیل (اردو)' : 'Description (Urdu)'}><textarea className="input" aria-label={lang === 'ur' ? 'تفصیل (اردو)' : 'Description (Urdu)'} value={p.description_ur} onChange={(e) => set('description_ur', e.target.value)} /></Field>
-      </div>}
-      {tab === 'pricing' && <div className="grid g2">
-        <MoneyField label={lang === 'ur' ? 'خرید ریٹ' : 'Purchase Rate'} paisa={p.purchase_rate_paisa} onChange={(v) => set('purchase_rate_paisa', v)} />
-        <MoneyField label={lang === 'ur' ? 'فروخت ریٹ' : 'Sale Rate'} paisa={p.sale_rate_paisa} onChange={(v) => set('sale_rate_paisa', v)} />
-        <MoneyField label={lang === 'ur' ? 'عوامی قیمت' : 'Public Price'} paisa={p.public_price_paisa} onChange={(v) => set('public_price_paisa', v)} />
-        <TextField label={lang === 'ur' ? 'ٹیکس % (1000 = 1%)' : 'Tax % (1000 = 1%)'} value={String(p.tax_pct_milli)} onChange={(v) => set('tax_pct_milli', Number(v) || 0)} inputMode="numeric" />
-        <CheckField label={lang === 'ur' ? 'ویب پر قیمت دکھائیں' : 'Show Price on Public Web'} checked={p.show_public_price} onChange={(v) => set('show_public_price', v)} />
-        <div className="notice small">{lang === 'ur' ? 'عوامی API کبھی لاگت، مارجن، سپلائر یا اندرونی نوٹ نہیں بھیجتا (H6)۔' : 'Public API never leaks purchase cost, margins, suppliers, or internal notes (H6).'}</div>
-      </div>}
-      {tab === 'stock' && <div className="grid g2">
-        <TextField label={lang === 'ur' ? 'بنیادی یونٹ' : 'Base Unit'} value={p.base_unit} onChange={(v) => set('base_unit', v)} required />
-        <TextField label={lang === 'ur' ? 'خرید یونٹ' : 'Purchase Unit'} value={p.purchase_unit} onChange={(v) => set('purchase_unit', v)} required />
-        <TextField label={lang === 'ur' ? 'فروخت یونٹ' : 'Sale Unit'} value={p.sale_unit} onChange={(v) => set('sale_unit', v)} required />
-        <TextField label={lang === 'ur' ? 'تبدیلی (milli; 1000 = 1:1)' : 'Conversion Ratio (milli; 1000 = 1:1)'} value={fromMilli(p.conversion_ratio_milli)} onChange={(v) => { try { set('conversion_ratio_milli', toMilli(v)); } catch { /* ignore */ } }} />
-        <QtyField label={lang === 'ur' ? 'کم اسٹاک حد' : 'Reorder Alert Level'} milli={p.reorder_level_milli} onChange={(v) => set('reorder_level_milli', v)} />
-        <CheckField label={lang === 'ur' ? 'بیچ ٹریکنگ' : 'Batch Tracking'} checked={p.track_batch} onChange={(v) => set('track_batch', v)} />
-        <CheckField label={lang === 'ur' ? 'ایکسپائری ٹریکنگ' : 'Expiry Tracking'} checked={p.track_expiry} onChange={(v) => set('track_expiry', v)} />
-        <CheckField label={lang === 'ur' ? 'پیسٹی سائیڈ (بیچ + ایکسپائری لازمی)' : 'Pesticide (Mandatory Batch + Expiry)'} checked={p.is_pesticide} onChange={(v) => { set('is_pesticide', v); if (v) { set('track_batch', true); set('track_expiry', true); } }} />
-        <div className="notice small">{lang === 'ur' ? 'موجودہ اسٹاک: ' : 'Current Stock: '}<span className="num">{fromMilli(p.stock_milli ?? 0)}</span> — {lang === 'ur' ? 'صرف پوسٹڈ دستاویزات سے بدلتا ہے۔' : 'Updates exclusively via posted documents.'}</div>
-      </div>}
-      {tab === 'web' && <div className="grid g2">
-        <CheckField label={lang === 'ur' ? 'ویب پر شائع کریں' : 'Publish to Web'} checked={p.is_published} onChange={(v) => set('is_published', v)} />
-        <CheckField label={lang === 'ur' ? 'نمایاں' : 'Featured Product'} checked={p.is_featured} onChange={(v) => set('is_featured', v)} />
-        <CheckField label={lang === 'ur' ? 'فعال' : 'Active'} checked={p.is_active} onChange={(v) => set('is_active', v)} />
-        <SelectField label={lang === 'ur' ? 'دستیابی' : 'Availability Mode'} value={p.availability_mode} onChange={(v) => set('availability_mode', v)}
-          options={[{ value: 'AUTO', label: lang === 'ur' ? 'اسٹاک کے مطابق' : 'Auto (based on stock)' }, { value: 'ALWAYS', label: lang === 'ur' ? 'ہمیشہ دستیاب' : 'Always Available' }, { value: 'CALL', label: lang === 'ur' ? 'کال کریں' : 'Call for Availability' }]} />
-        <TextField label={lang === 'ur' ? 'SEO عنوان' : 'SEO Title'} value={p.seo_title} onChange={(v) => set('seo_title', v)} />
-        <TextField label={lang === 'ur' ? 'SEO تفصیل' : 'SEO Description'} value={p.seo_description} onChange={(v) => set('seo_description', v)} />
-        <div className="notice info small">{lang === 'ur' ? 'شائع کرنے کے بعد ویب سائٹ پر تبدیلیاں فوری لاگو ہو جاتی ہیں۔' : 'Changes apply to the website immediately after publishing.'}</div>
-      </div>}
-      {tab === 'images' && <div>
-        <p>{lang === 'ur' ? 'تمام مصنوعات کی تصاویر محفوظ طریقے سے اپ لوڈ ہوتی ہیں۔' : 'Product images are stored securely.'}</p>
-        <input className="input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} aria-label={lang === 'ur' ? 'تصویر اپ لوڈ' : 'Upload Image'} />
-        {uploadBusy && <Skeleton rows={1} />}
-        <div className="row" style={{ flexWrap: 'wrap', marginBlockStart: 12 }}>
-          {(p.images ?? []).map((i: any) => <div key={i.id} className="card" style={{ padding: 8 }}>
-            <img src={`/media/${i.r2_key}`} alt={i.alt_ur} width={120} height={120} />
-            <div className="small">{i.alt_ur}</div></div>)}
-          {!(p.images ?? []).length && <EmptyState title={lang === 'ur' ? 'ابھی کوئی تصویر نہیں' : 'No images yet'} />}
-        </div>
-        <div className="small" style={{ color: 'var(--text-dim)' }}>{lang === 'ur' ? 'تصاویر خودکار طور پر ویب سائٹ کے لیے بہتر بنائی جاتی ہیں۔' : 'Images are automatically optimized for the website.'}</div>
-      </div>}
-      {err && <div className="err" role="alert"><Mark kind="warn" /> {err}</div>}
-      <div className="btn-row" style={{ marginBlockStart: 16 }}>
+      <div className="btn-row no-print">
         <Button onClick={save} loading={busy}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
-        {id && <Button variant="secondary" onClick={async () => {
-          await api(`/api/v1/products/${id}/publish`, { method: 'POST', body: { published: !p.is_published } });
-          set('is_published', !p.is_published); toast(lang === 'ur' ? 'کیش صاف کر دی گئی' : 'Cache purged');
-        }}>{p.is_published ? (lang === 'ur' ? 'ان پبلش' : 'Unpublish') : (lang === 'ur' ? 'پبلش + کیش صاف' : 'Publish & Purge')}</Button>}
-        {saved && <Chip tone="success">{lang === 'ur' ? 'محفوظ' : 'Saved'}</Chip>}
       </div>
     </div>
+
+    {/* All product fields unified on ONE screen - no tabs, no extra tables */}
+    <div className="card" style={{ marginTop: 14 }}>
+      <div className="grid g2">
+        {/* 1. Item Name */}
+        <TextField label={lang === 'ur' ? 'آئٹم کا نام (اردو)' : 'Item Name (Urdu)'} value={p.name_ur} onChange={(v) => set('name_ur', v)} placeholder="مثلاً یوریا کھاد، سیمنٹ، گندم..." />
+        <TextField label={lang === 'ur' ? 'آئٹم کا نام (English)' : 'Item Name (English)'} value={p.name_en} onChange={(v) => set('name_en', v)} dir="ltr" placeholder="e.g. Sona Urea, Lucky Cement..." />
+
+        {/* 2. Quantity (Kitni item ha quantity add ho) & 6. SKU */}
+        <TextField label={lang === 'ur' ? 'تعداد / اسٹاک مقدار (کتنی آئٹم ہے)' : 'Item Quantity / Pieces'} value={p.initial_stock_qty} onChange={(v) => set('initial_stock_qty', v)} inputMode="numeric" placeholder="مثلاً 50، 100، 500" />
+        <TextField label={lang === 'ur' ? 'SKU (کوڈ)' : 'SKU (Code)'} value={p.sku} onChange={(v) => set('sku', v)} placeholder="اختیاری SKU / کوڈ" />
+
+        {/* 3. Item Kharid Qeemat & 4. Sale Qeemat */}
+        <MoneyField label={lang === 'ur' ? 'آئٹم خرید قیمت (Kharid Qeemat)' : 'Purchase Rate / Cost'} paisa={p.purchase_rate_paisa} onChange={(v) => set('purchase_rate_paisa', v)} />
+        <MoneyField label={lang === 'ur' ? 'سیل قیمت (Sale Qeemat)' : 'Sale Rate / Price'} paisa={p.sale_rate_paisa} onChange={(v) => { set('sale_rate_paisa', v); if (!p.public_price_paisa) set('public_price_paisa', v); }} />
+
+        {/* 5. Brand (with Inline Add) & 7. Category */}
+        <div className="field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <label style={{ margin: 0 }}>{lang === 'ur' ? 'برانڈ (Brand)' : 'Brand'}</label>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 8px', fontSize: '11px', height: 'auto', minHeight: 'unset' }}
+              onClick={() => { setNewBrandUr(''); setNewBrandEn(''); setNewBrandErr(''); setShowBrandModal(true); }}
+            >
+              + {lang === 'ur' ? 'نیا برانڈ' : 'New Brand'}
+            </button>
+          </div>
+          <select className="input" value={p.brand_id ?? ''} onChange={(e) => set('brand_id', e.target.value || null)}>
+            <option value="">— {lang === 'ur' ? 'برانڈ منتخب کریں' : 'Select Brand'} —</option>
+            {(brands.data ?? []).map((b: any) => (
+              <option key={b.id} value={b.id}>{lang === 'ur' ? b.name_ur : (b.name_en || b.name_ur)}</option>
+            ))}
+          </select>
+        </div>
+        <SelectField label={lang === 'ur' ? 'زمرہ (Category)' : 'Category'} value={p.category_id} onChange={(v) => set('category_id', v)} placeholder={lang === 'ur' ? 'زمرہ منتخب کریں' : 'Select Category'}
+          options={(cats.data ?? []).map((c: any) => ({ value: c.id, label: `${lang === 'ur' ? c.name_ur : (c.name_en || c.name_ur)} (${c.code})` }))} />
+
+        {/* 8. SEO Title & 9. SEO Description */}
+        <TextField label={lang === 'ur' ? 'SEO عنوان (SEO Title)' : 'SEO Title'} value={p.seo_title} onChange={(v) => set('seo_title', v)} placeholder="گوگل اور سرچ کے لیے عنوان" />
+        <TextField label={lang === 'ur' ? 'SEO تفصیل (SEO Description)' : 'SEO Description'} value={p.seo_description} onChange={(v) => set('seo_description', v)} placeholder="سرچ رزلٹس میں ظاہر ہونے والی تفصیل" />
+      </div>
+
+      {/* 11. Item Description */}
+      <div style={{ marginTop: 14 }}>
+        <Field label={lang === 'ur' ? 'آئٹم کی تفصیل (Item Description)' : 'Item Description'}>
+          <textarea className="input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+            placeholder={lang === 'ur' ? 'آئٹم کی خصوصیات، استعمال اور دیگر اہم تفصیلات درج کریں...' : 'Enter product features, details and notes...'}
+            value={p.description_ur} onChange={(e) => set('description_ur', e.target.value)} />
+        </Field>
+      </div>
+
+      {/* 10. Multiple Images Upload & Gallery */}
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+        <div className="between" style={{ marginBottom: 8 }}>
+          <label style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>
+            {lang === 'ur' ? 'متعدد تصاویر (Multiple Images)' : 'Multiple Images'}
+          </label>
+          <span className="small" style={{ color: 'var(--text-dim)' }}>
+            {lang === 'ur' ? 'ایک یا کئی تصاویر ایک ساتھ منتخب کریں' : 'Select one or more images'}
+          </span>
+        </div>
+        <input
+          className="input"
+          type="file"
+          multiple
+          accept="image/png,image/jpeg,image/webp,image/avif"
+          onChange={handleMultipleImages}
+          aria-label={lang === 'ur' ? 'تصاویر منتخب کریں' : 'Choose Images'}
+        />
+        {uploadBusy && <Skeleton rows={1} />}
+
+        {/* Preview grid for existing and staged images */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 14 }}>
+          {existingImages.map((img: any) => (
+            <div key={img.id} className="card" style={{ padding: 6, position: 'relative', width: 110, textAlign: 'center' }}>
+              <img src={`/media/${img.r2_key}`} alt={img.alt_ur} style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6 }} />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '2px 6px', fontSize: 11, color: 'var(--danger)', marginTop: 4, width: '100%' }}
+                onClick={() => deleteExistingImage(img.id)}
+              >
+                {lang === 'ur' ? 'حذف کریں' : 'Delete'}
+              </button>
+            </div>
+          ))}
+          {pendingImages.map((pImg, idx) => (
+            <div key={idx} className="card" style={{ padding: 6, position: 'relative', width: 110, textAlign: 'center', borderColor: 'var(--brand-500)' }}>
+              <img src={pImg.data_url} alt={pImg.name} style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6 }} />
+              <span className="small" style={{ fontSize: 10, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                {lang === 'ur' ? 'نئی تصویر' : 'New'}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '2px 6px', fontSize: 11, color: 'var(--danger)', marginTop: 2, width: '100%' }}
+                onClick={() => removePendingImage(idx)}
+              >
+                {lang === 'ur' ? 'ہٹائیں' : 'Remove'}
+              </button>
+            </div>
+          ))}
+          {!existingImages.length && !pendingImages.length && (
+            <div className="small" style={{ color: 'var(--text-dim)', padding: '10px 0' }}>
+              {lang === 'ur' ? 'ابھی کوئی تصویر شامل نہیں (اختیاری ہے)' : 'No images attached (optional)'}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {err && <div className="err" role="alert" style={{ marginTop: 16 }}><Mark kind="warn" /> {err}</div>}
+
+      <div className="btn-row" style={{ marginBlockStart: 20 }}>
+        <Button onClick={save} loading={busy}>{lang === 'ur' ? 'محفوظ کریں (Save Product)' : 'Save Product'}</Button>
+        <Button variant="secondary" onClick={() => nav('/erp/products')}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
+        {saved && <Chip tone="success">{lang === 'ur' ? 'محفوظ ہو گیا' : 'Saved'}</Chip>}
+      </div>
+    </div>
+
+    <Sheet open={showBrandModal} onClose={() => setShowBrandModal(false)} title={lang === 'ur' ? 'نیا برانڈ شامل کریں' : 'Add New Brand'}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <TextField label={lang === 'ur' ? 'برانڈ کا نام (اردو)' : 'Brand Name (Urdu)'} value={newBrandUr} onChange={setNewBrandUr} />
+        <TextField label={lang === 'ur' ? 'برانڈ کا نام (English)' : 'Brand Name (English)'} value={newBrandEn} onChange={setNewBrandEn} dir="ltr" />
+        {newBrandErr && <div className="err" role="alert"><Mark kind="warn" /> {newBrandErr}</div>}
+        <div className="btn-row" style={{ marginTop: 10 }}>
+          <Button onClick={handleAddBrand} loading={newBrandBusy} disabled={!newBrandUr.trim() && !newBrandEn.trim()}>{lang === 'ur' ? 'شامل کریں' : 'Add Brand'}</Button>
+          <Button variant="secondary" onClick={() => setShowBrandModal(false)}>{lang === 'ur' ? 'منسوخ' : 'Cancel'}</Button>
+        </div>
+      </div>
+    </Sheet>
   </div>;
 }
 
@@ -973,7 +1199,10 @@ export function SettingsScreen() {
             try { v = JSON.parse(value); } catch { /* plain string */ }
             await api('/api/v1/settings', { method: 'PUT', body: { key, value: v } });
             toast(lang === 'ur' ? 'محفوظ + عوامی کیش صاف' : 'Saved & cache purged'); refetch();
-          } catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
+          } catch (e: any) {
+            setErr(e.message_ur ?? String(e));
+            if (e instanceof ZtError && e.isVersionConflict) refetch();
+          } finally { setBusy(false); }
         }} loading={busy}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
         {err && <div className="err"><Mark kind="warn" /> {err}</div>}</div>
       <div className="card"><h2>{lang === 'ur' ? 'آف لائن PIN / کیش انکرپشن' : 'Offline PIN & Cache Encryption'}</h2>
@@ -1107,8 +1336,14 @@ export function WebsiteCms() {
           { value: 'DRAFT', label: lang === 'ur' ? 'ڈرافٹ' : 'Draft' }, { value: 'REVIEW_REQUIRED', label: lang === 'ur' ? 'مالک کا جائزہ' : 'Review Required' }, { value: 'PUBLISHED', label: lang === 'ur' ? 'شائع' : 'Published' }]} />
         <Button loading={busy} onClick={async () => {
           setBusy(true); setErr('');
-          try { await api(`/api/v1/website/pages/${slug}`, { method: 'PUT', body: { slug, title_ur: title, title_en: '', body_ur: body, body_en: '', status } }); toast(lang === 'ur' ? 'محفوظ' : 'Saved'); pages.refetch(); }
-          catch (e: any) { setErr(e.message_ur ?? String(e)); } finally { setBusy(false); }
+          try {
+            const cur = (pages.data ?? []).find((x: any) => x.slug === slug);
+            await api(`/api/v1/website/pages/${slug}`, { method: 'PUT', body: { slug, title_ur: title, title_en: '', body_ur: body, body_en: '', status, base_version: cur?.version } });
+            toast(lang === 'ur' ? 'محفوظ' : 'Saved'); pages.refetch();
+          } catch (e: any) {
+            setErr(e.message_ur ?? String(e));
+            if (e instanceof ZtError && e.isVersionConflict) pages.refetch();
+          } finally { setBusy(false); }
         }}>{lang === 'ur' ? 'محفوظ کریں' : 'Save'}</Button>
         {err && <div className="err"><Mark kind="warn" /> {err}</div>}
       </div>
@@ -1631,6 +1866,10 @@ export function OrdersScreen() {
         </button>
         <h1 className="head-icon"><NavIcon icon="orders" label={t('orders')} size={34} />{t('orders')}</h1>
       </div>
+      <div className="btn-row no-print">
+        <Link className="btn btn-primary btn-sm" to="/erp/sales/new">{lang === 'ur' ? '+ نیا آرڈر / فروخت' : '+ New Order / Sale'}</Link>
+        <Link className="btn btn-secondary btn-sm" to="/checkout" target="_blank">{lang === 'ur' ? 'آن لائن آرڈر فارم' : 'Online Order Form'}</Link>
+      </div>
     </div>
     <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
       {ready.data && <>
@@ -1757,6 +1996,7 @@ export function PaymentMethodsScreen() {
     setBusy(true); setErr('');
     try {
       const body = { ...form, account_id: form.account_id || null, is_active: !!form.is_active, sort: Number(form.sort) || 0 };
+      if (!isNew) (body as any).base_version = form.version;
       const res = await api<any>(isNew ? '/api/v1/payment-methods' : `/api/v1/payment-methods/${body.id}`, { method: isNew ? 'POST' : 'PUT', body });
       const methodId = isNew ? res.id : body.id;
       if (qrFile && methodId) {
@@ -1769,14 +2009,21 @@ export function PaymentMethodsScreen() {
         await api(`/api/v1/payment-methods/${methodId}/qr`, { method: 'POST', body: { data_url: dataUrl } });
       }
       toast(t('saved')); refetch(); setSel(null);
-    } catch (e: any) { setErr(e.message_ur ?? String(e)); }
+    } catch (e: any) {
+      setErr(e.message_ur ?? String(e));
+      if (e instanceof ZtError && e.isVersionConflict) { refetch(); const current = e.current as any; if (current) setForm((f: any) => ({ ...f, ...current, account_id: current.account_id ?? '' })); }
+    }
     finally { setBusy(false); }
   };
 
   const remove = async (m: any) => {
     setBusy(true);
-    try { const r = await api<any>(`/api/v1/payment-methods/${m.id}`, { method: 'DELETE' }); toast(r.deactivated ? (lang === 'ur' ? 'غیر فعال کر دیا' : 'Deactivated') : (lang === 'ur' ? 'حذف کر دیا' : 'Deleted')); refetch(); }
-    catch (e: any) { toast(e.message_ur ?? String(e), 'err'); }
+    try {
+      const q = m?.version !== undefined ? `?base_version=${encodeURIComponent(String(m.version))}` : '';
+      const r = await api<any>(`/api/v1/payment-methods/${m.id}${q}`, { method: 'DELETE' });
+      toast(r.deactivated ? (lang === 'ur' ? 'غیر فعال کر دیا' : 'Deactivated') : (lang === 'ur' ? 'حذف کر دیا' : 'Deleted')); refetch();
+    }
+    catch (e: any) { toast(e.message_ur ?? String(e), 'err'); if (e instanceof ZtError && e.isVersionConflict) refetch(); }
     finally { setBusy(false); }
   };
 

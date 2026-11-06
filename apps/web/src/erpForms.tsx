@@ -226,20 +226,14 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
         <h2>{lang === 'ur' ? 'بنیادی معلومات' : 'Basic Information'}</h2>
         <div className="grid g2">
           <TextField label={lang === 'ur' ? 'تاریخ' : 'Date'} value={date} onChange={(v) => { setDate(v); setDirty(true); }} type="date" required />
-          <SelectField label={lang === 'ur' ? 'سیزن' : 'Season'} value={season} onChange={setSeason} options={[
-            { value: 'NONE', label: '—' }, { value: 'KHARIF', label: lang === 'ur' ? 'خریف (Apr–Sep)' : 'Kharif (Apr–Sep)' }, { value: 'RABI', label: lang === 'ur' ? 'ربی (Oct–Mar)' : 'Rabi (Oct–Mar)' }]} />
+          <Combobox label={kind === 'sale' ? (lang === 'ur' ? 'خریدار / گاہک' : 'Customer') : (lang === 'ur' ? 'سپلائر' : 'Supplier')} value={partyId} onChange={(v) => { setPartyId(v); setDirty(true); }}
+            options={partyOptions} onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder={lang === 'ur' ? 'نام تلاش کریں یا نیا لکھیں' : 'Search or type name'} required error={fieldErrors.party_name} />
         </div>
-        <Combobox label={kind === 'sale' ? (lang === 'ur' ? 'خریدار / گاہک' : 'Customer') : (lang === 'ur' ? 'سپلائر' : 'Supplier')} value={partyId} onChange={(v) => { setPartyId(v); setDirty(true); }}
-          options={partyOptions} onCreate={(n) => { setPartyName(n); setPartyId(''); }} placeholder={lang === 'ur' ? 'نام تلاش کریں یا نیا لکھیں' : 'Search or type name'} required error={fieldErrors.party_name} />
         {!partyId && partyName && <Chip tone="success">{lang === 'ur' ? `نیا فریق: ${partyName}` : `New Party: ${partyName}`}</Chip>}
-        <div className="grid g2">
-          <TextField label={lang === 'ur' ? 'موبائل نمبر' : 'Mobile Number'} value={partyPhone} onChange={setPartyPhone} placeholder="03XX-XXXXXXX"
-            error={fieldErrors.party_phone} required={kind === 'sale' && book === 'PEST'} />
-          <TextField label={lang === 'ur' ? 'پتہ / گاؤں' : 'Address / Village'} value={partyAddress} onChange={setPartyAddress}
-            required={kind === 'sale' && book === 'PEST'} />
+        <div className="grid g2" style={{ marginTop: 8 }}>
+          <TextField label={lang === 'ur' ? 'موبائل نمبر' : 'Mobile Number'} value={partyPhone} onChange={setPartyPhone} placeholder="03XX-XXXXXXX" />
+          <TextField label={lang === 'ur' ? 'پتہ / شہر' : 'Address / City'} value={partyAddress} onChange={setPartyAddress} />
         </div>
-        {kind === 'purchase' && <TextField label={lang === 'ur' ? 'سپلائر انوائس نمبر' : 'Supplier Invoice No'} value={supplierInvoice} onChange={setSupplierInvoice} />}
-        {kind === 'sale' && book === 'FERT' && <TextField label={lang === 'ur' ? 'CNIC (اختیاری، انکرپٹڈ)' : 'CNIC (Optional, Encrypted)'} value={cnic} onChange={setCnic} />}
       </div>
 
       <div className="card">
@@ -261,26 +255,8 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
               unit={productRows.find((p: any) => p.id === l.product_id)?.base_unit} required />
             <MoneyField label={lang === 'ur' ? 'ریٹ (فی بنیادی یونٹ)' : 'Rate (per Unit)'} paisa={l.rate_paisa} onChange={(v) => setLine(i, { rate_paisa: v })} required />
           </div>
-          {quick && <MoneyField label={lang === 'ur' ? 'رقم (کل)' : 'Amount (Total)'} paisa={0} onChange={(v) => {
-            if (l.qty_milli > 0) setLine(i, { rate_paisa: Math.round(v * 1000 / l.qty_milli) });
-          }} helper={lang === 'ur' ? 'رقم درج کریں؛ ریٹ خود بخود نکلا جائے گا' : 'Enter amount; rate is auto-calculated'} />}
-          {!quick && <div className="grid g2">
-            <MoneyField label={lang === 'ur' ? 'رعایت' : 'Discount'} paisa={l.discount_paisa} onChange={(v) => setLine(i, { discount_paisa: v })} />
-            <div className="card" style={{ padding: 12 }}><div className="small">{lang === 'ur' ? 'لائن کل' : 'Line Total'}</div>
-              <div className="num">{formatPKR(lineAmount(l.qty_milli, l.rate_paisa) - l.discount_paisa)}</div></div>
-          </div>}
-          {(book === 'PEST' || productRows.find((p: any) => p.id === l.product_id)?.track_expiry) && !quick &&
-            <div className="grid g2">
-              <TextField label={lang === 'ur' ? 'بیچ نمبر' : 'Batch No'} value={l.batch_no} onChange={(v) => setLine(i, { batch_no: v })} required={kind === 'purchase'} />
-              <TextField label={lang === 'ur' ? 'مینوفیکچرر' : 'Manufacturer'} value={l.manufacturer} onChange={(v) => setLine(i, { manufacturer: v })} required={kind === 'purchase'} />
-              <TextField label={lang === 'ur' ? 'تاریخِ تیاری' : 'Mfg Date'} value={l.mfg_date} onChange={(v) => setLine(i, { mfg_date: v })} type="date" required={kind === 'purchase'} />
-              <TextField label={lang === 'ur' ? 'ایکسپائری' : 'Expiry Date'} value={l.expiry_date} onChange={(v) => setLine(i, { expiry_date: v })} type="date" required={kind === 'purchase'} />
-            </div>}
-          {!quick && (book === 'FERT' || productRows.find((p: any) => p.id === l.product_id)?.category_id === 'cat-fert') && <div className="grid g2">
-            <TextField label={lang === 'ur' ? 'بوریوں کی تعداد' : 'Number of Bags'} value={String(l.bags || '')} onChange={(v) => setLine(i, { bags: Number(v) || 0 })} inputMode="numeric" />
-            <TextField label={lang === 'ur' ? 'وزن فی بوری (گرام)' : 'Weight per Bag (g)'} value={String(l.weight_per_bag_grams || '')}
-              onChange={(v) => setLine(i, { weight_per_bag_grams: Number(v) || 0 })} inputMode="numeric" />
-          </div>}
+          <div className="card" style={{ padding: 10, marginTop: 8 }}><div className="small">{lang === 'ur' ? 'لائن کل' : 'Line Total'}</div>
+            <div className="num" style={{ fontWeight: 700, fontSize: 16 }}>{formatPKR(lineAmount(l.qty_milli, l.rate_paisa) - l.discount_paisa)}</div></div>
         </div>)}
         <div style={{ display: 'flex', gap: 10, marginBlockStart: 12 }}>
           <Button variant="primary" size="sm" onClick={addLine}>
@@ -288,13 +264,6 @@ export function DocumentForm({ kind, book }: { kind: 'purchase' | 'sale'; book: 
           </Button>
         </div>
       </div>
-
-      {!quick && <div className="card"><h2>{lang === 'ur' ? 'اضافی اخراجات' : 'Extra Expenses'}</h2><div className="grid g2">
-        <MoneyField label={lang === 'ur' ? 'رعایت' : 'Discount'} paisa={discount} onChange={setDiscount} />
-        {kind === 'purchase' && <><MoneyField label={lang === 'ur' ? 'مال برداری' : 'Freight'} paisa={freight} onChange={setFreight} />
-          <MoneyField label={lang === 'ur' ? 'لوڈنگ / ان لوڈنگ' : 'Loading / Labour'} paisa={loadingC} onChange={setLoading} />
-          <MoneyField label={lang === 'ur' ? 'دیگر' : 'Other Charges'} paisa={other} onChange={setOther} /></>}
-      </div></div>}
 
       <div className="card"><h2>{lang === 'ur' ? 'ادائیگی' : 'Payment Details'}</h2>
         <CheckField label={lang === 'ur' ? 'ادھار (بقایا بعد میں وصول/ادا ہوگا)' : 'Credit (Balance payable/receivable later)'} checked={credit} onChange={setCredit} />

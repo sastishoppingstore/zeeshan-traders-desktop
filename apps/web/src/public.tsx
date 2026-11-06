@@ -1,5 +1,5 @@
 /** PUBLIC WEBSITE — PUB-01..09. All data comes from /api/v1/public/* (no internal fields). */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useGet } from './api.js';
 import { useApp } from './app-state.js';
@@ -8,11 +8,14 @@ import { IMAGES } from './images.js';
 import { categoryMedia } from './media.js';
 import { useCart } from './cart.js';
 import { Home } from './pages/home.js';
-import { CartButton, ProductDetail, Products } from './pages/products.js';
-import { Enquiry } from './pages/enquiry.js';
-import { Checkout } from './pages/checkout.js';
-import { InvoiceVerify } from './pages/verify.js';
-import { CmsPage, NotFound } from './pages/cms.js';
+import { CartButton } from './pages/products.js';
+const Products = lazy(() => import('./pages/products.js').then((m) => ({ default: m.Products })));
+const ProductDetail = lazy(() => import('./pages/products.js').then((m) => ({ default: m.ProductDetail })));
+const Enquiry = lazy(() => import('./pages/enquiry.js').then((m) => ({ default: m.Enquiry })));
+const Checkout = lazy(() => import('./pages/checkout.js').then((m) => ({ default: m.Checkout })));
+const InvoiceVerify = lazy(() => import('./pages/verify.js').then((m) => ({ default: m.InvoiceVerify })));
+const CmsPage = lazy(() => import('./pages/cms.js').then((m) => ({ default: m.CmsPage })));
+const NotFound = lazy(() => import('./pages/cms.js').then((m) => ({ default: m.NotFound })));
 import { ScrollProgress, GoldDust } from './ui/particles.js';
 import { MediaTile } from './ui/cards.js';
 import { ChatMark } from './ui/icons.js';
@@ -108,7 +111,7 @@ function Header({ business }: { business: any }) {
 }
 
 function MobileNav({ business }: { business: any }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const loc = useLocation();
   const { count } = useCart();
   const b = business ?? BUSINESS_PROFILE;
@@ -116,7 +119,7 @@ function MobileNav({ business }: { business: any }) {
     ['/', 'home', t('home')],
     ['/products', 'products', t('products')],
     ['/categories', 'categories', t('categories')],
-    ['/checkout', 'enquiry', t('checkout')],
+    ['/checkout', 'enquiry', lang === 'ur' ? 'آرڈر کریں' : 'Order'],
     ['/contact', 'contact', t('contact')],
   ];
   const isActive = (to: string) => (to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to));
@@ -159,7 +162,7 @@ function Footer({ business }: { business: any }) {
         <h2 style={{ fontSize: 18 }}>{t('quickLinks')}</h2>
         <div className="link-list">
           <Link to="/products">{t('products')}</Link><Link to="/categories">{t('categories')}</Link>
-          <Link to="/enquiry">{t('enquiry')}</Link><Link to="/privacy">{t('privacy')}</Link>
+          <Link to="/checkout">{t('checkout')}</Link><Link to="/enquiry">{t('enquiry')}</Link><Link to="/privacy">{t('privacy')}</Link>
           <Link to="/terms">{t('terms')}</Link><Link to="/erp">{t('erpArea')}</Link>
         </div>
       </div>
@@ -176,18 +179,18 @@ function Footer({ business }: { business: any }) {
 }
 
 function FloatingActions({ business }: { business: any }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const { count } = useCart();
   const loc = useLocation();
-  if (loc.pathname === '/enquiry') return null;
+  if (loc.pathname === '/checkout') return null;
   return <>
     <a className="float-wa" href={business?.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer" aria-label={t('whatsapp')}>
       <ChatMark />
     </a>
-    {count > 0 && <Link to="/enquiry" className="float-cart" aria-label={t('viewCart')}>
-      <span className="num">{count}</span>
-      <span className="float-cart-label">{t('cart')}</span>
-    </Link>}
+    <Link to="/checkout" className="float-cart" aria-label={lang === 'ur' ? 'آرڈر کریں' : 'Order Now'}>
+      <span className="float-cart-label">{lang === 'ur' ? 'آرڈر کریں' : 'Order'}</span>
+      {count > 0 && <span className="num">({count})</span>}
+    </Link>
   </>;
 }
 
@@ -251,21 +254,23 @@ export function PublicApp() {
     <a className="skip-link" href="#main">{t('skipToMain')}</a>
     <Header business={b} />
     <main id="main" ref={mainRef} tabIndex={-1}>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/products" element={<Products />} />
-        <Route path="/categories" element={<CategoriesScreen />} />
-        <Route path="/category/:slug" element={<CategoryRoute />} />
-        <Route path="/product/:slug" element={<ProductRoute />} />
-        <Route path="/enquiry" element={<Enquiry />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/verify/:id" element={<InvoiceVerify />} />
-        <Route path="/about" element={<CmsPage slug="about" fallbackTitle={t('about')} />} />
-        <Route path="/contact" element={<CmsPage slug="contact" fallbackTitle={t('contact')} />} />
-        <Route path="/privacy" element={<CmsPage slug="privacy" fallbackTitle={t('privacy')} />} />
-        <Route path="/terms" element={<CmsPage slug="terms" fallbackTitle={t('terms')} />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<div className="route-loading" role="status" aria-live="polite"><div className="route-loading-bar" /></div>}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/categories" element={<CategoriesScreen />} />
+          <Route path="/category/:slug" element={<CategoryRoute />} />
+          <Route path="/product/:slug" element={<ProductRoute />} />
+          <Route path="/enquiry" element={<Enquiry />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/verify/:id" element={<InvoiceVerify />} />
+          <Route path="/about" element={<CmsPage slug="about" fallbackTitle={t('about')} />} />
+          <Route path="/contact" element={<CmsPage slug="contact" fallbackTitle={t('contact')} />} />
+          <Route path="/privacy" element={<CmsPage slug="privacy" fallbackTitle={t('privacy')} />} />
+          <Route path="/terms" element={<CmsPage slug="terms" fallbackTitle={t('terms')} />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </main>
     <Footer business={b} />
     <MobileNav business={b} />

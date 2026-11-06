@@ -12,6 +12,10 @@ export const nonnegMilli = milli.refine((v) => v >= 0, 'quantity must be non-neg
 export const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD');
 export const ymStr = z.string().regex(/^\d{4}-\d{2}$/, 'period must be YYYY-MM');
 export const id = z.string().min(1).max(80);
+export const optionalId = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v === undefined ? null : v),
+  id.nullable().optional()
+);
 const bookCodes = z.enum(BOOKS.map((b) => b.code) as [string, ...string[]]);
 const cropCodes = z.enum([...CROP_CODES] as [string, ...string[]]);
 const goodsCodes = z.enum([...GOODS_CODES] as [string, ...string[]]);
@@ -55,48 +59,172 @@ export const setupSchema = z.object({
 });
 export type SetupInput = z.infer<typeof setupSchema>;
 
-export const productSchema = z.object({
+export const flexibleBoolean = (defaultVal = false) => z.preprocess((v) => {
+  if (v === undefined || v === null || v === '') return defaultVal;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === '1' || s === 'true' || s === 'yes') return true;
+    if (s === '0' || s === 'false' || s === 'no') return false;
+    return Boolean(s);
+  }
+  return Boolean(v);
+}, z.boolean().default(defaultVal));
+
+function cleanProductInput(val: any) {
+  if (typeof val !== 'object' || val === null) return val;
+  const d = { ...val };
+  if (!d.name_ur && d.name_en) d.name_ur = String(d.name_en).trim();
+  if (!d.name_en && d.name_ur) d.name_en = String(d.name_ur).trim();
+  if (!d.name_ur) d.name_ur = 'نئی مصنوعات';
+  if (!d.name_en) d.name_en = d.name_ur;
+  if (!d.base_unit || !String(d.base_unit).trim()) d.base_unit = 'kg';
+  if (!d.purchase_unit || !String(d.purchase_unit).trim()) d.purchase_unit = d.base_unit;
+  if (!d.sale_unit || !String(d.sale_unit).trim()) d.sale_unit = d.base_unit;
+  const cr = Number(d.conversion_ratio_milli);
+  d.conversion_ratio_milli = cr > 0 ? Math.round(cr) : 1000;
+  const boolKeys = ['track_batch', 'track_expiry', 'is_pesticide', 'show_public_price', 'is_published', 'is_featured', 'is_active'] as const;
+  for (const b of boolKeys) {
+    if (d[b] !== undefined && d[b] !== null) {
+      if (typeof d[b] === 'number') d[b] = d[b] !== 0;
+      else if (typeof d[b] === 'string') {
+        const s = d[b].trim().toLowerCase();
+        d[b] = s === '1' || s === 'true' || s === 'yes';
+      } else {
+        d[b] = Boolean(d[b]);
+      }
+    }
+  }
+  if (d.is_pesticide) {
+    d.track_batch = true;
+    d.track_expiry = true;
+  }
+  d.purchase_rate_paisa = Math.max(0, Math.round(Number(d.purchase_rate_paisa) || 0));
+  d.sale_rate_paisa = Math.max(0, Math.round(Number(d.sale_rate_paisa) || 0));
+  d.public_price_paisa = Math.max(0, Math.round(Number(d.public_price_paisa) || 0));
+  d.tax_pct_milli = Math.max(0, Math.round(Number(d.tax_pct_milli) || 0));
+  d.reorder_level_milli = Math.max(0, Math.round(Number(d.reorder_level_milli) || 0));
+  d.grams_per_base_unit = Math.max(0, Math.round(Number(d.grams_per_base_unit) || 0));
+  if (!d.brand_id || d.brand_id === '—') d.brand_id = null;
+  if (d.availability_mode) {
+    const am = String(d.availability_mode).toUpperCase();
+    d.availability_mode = ['AUTO', 'ALWAYS', 'CALL'].includes(am) ? am : 'AUTO';
+  } else {
+    d.availability_mode = 'AUTO';
+  }
+  if (d.season) {
+    const sn = String(d.season).toUpperCase();
+    d.season = ['KHARIF', 'RABI', 'NONE'].includes(sn) ? sn : 'NONE';
+  } else {
+    d.season = 'NONE';
+  }
+  return d;
+}
+
+export const productObjectSchema = z.object({
   name_ur: z.string().min(1).max(160),
-  name_en: z.string().max(160).default(''),
-  category_id: id,
-  brand_id: id.nullable().optional(),
-  sku: z.string().max(80).optional().default(''),
-  barcode: z.string().max(80).optional().default(''),
-  slug: z.string().max(180).optional(),
-  description_ur: z.string().max(5000).optional().default(''),
-  description_en: z.string().max(5000).optional().default(''),
-  base_unit: z.string().min(1).max(40),
-  purchase_unit: z.string().min(1).max(40),
-  sale_unit: z.string().min(1).max(40),
-  conversion_ratio_milli: positiveMilli,
+  name_en: z.string().max(160).optional().nullable().transform((v) => v ?? ''),
+  category_id: z.string().max(80).optional().nullable().transform((v) => (!v || !v.trim() ? '' : v.trim())),
+  brand_id: optionalId,
+  sku: z.string().max(80).optional().nullable().transform((v) => v ?? ''),
+  barcode: z.string().max(80).optional().nullable().transform((v) => v ?? ''),
+  slug: z.string().max(180).optional().nullable().transform((v) => (!v || !v.trim() ? undefined : v.trim())),
+  description_ur: z.string().max(5000).optional().nullable().transform((v) => v ?? ''),
+  description_en: z.string().max(5000).optional().nullable().transform((v) => v ?? ''),
+  base_unit: z.string().min(1).max(40).default('kg'),
+  purchase_unit: z.string().min(1).max(40).default('kg'),
+  sale_unit: z.string().min(1).max(40).default('kg'),
+  conversion_ratio_milli: positiveMilli.default(1000),
   grams_per_base_unit: nonnegMilli.default(0),
-  track_batch: z.boolean().default(false),
-  track_expiry: z.boolean().default(false),
-  is_pesticide: z.boolean().default(false),
+  track_batch: flexibleBoolean(false),
+  track_expiry: flexibleBoolean(false),
+  is_pesticide: flexibleBoolean(false),
   reorder_level_milli: nonnegMilli.default(0),
   purchase_rate_paisa: nonnegPaisa.default(0),
   sale_rate_paisa: nonnegPaisa.default(0),
   tax_pct_milli: nonnegMilli.default(0),
-  show_public_price: z.boolean().default(false),
+  show_public_price: flexibleBoolean(false),
   public_price_paisa: nonnegPaisa.default(0),
   availability_mode: z.enum(['AUTO', 'ALWAYS', 'CALL']).default('AUTO'),
-  is_published: z.boolean().default(false),
-  is_featured: z.boolean().default(false),
-  is_active: z.boolean().default(true),
-  seo_title: z.string().max(200).optional().default(''),
-  seo_description: z.string().max(400).optional().default(''),
+  is_published: flexibleBoolean(false),
+  is_featured: flexibleBoolean(false),
+  is_active: flexibleBoolean(true),
+  seo_title: z.string().max(200).optional().nullable().transform((v) => v ?? ''),
+  seo_description: z.string().max(400).optional().nullable().transform((v) => v ?? ''),
   season: z.enum(['KHARIF', 'RABI', 'NONE']).default('NONE'),
 });
+
+export const productSchema = z.preprocess(cleanProductInput, productObjectSchema);
+export const productUpdateSchema = z.preprocess((val: any) => {
+  if (typeof val !== 'object' || val === null) return val;
+  const d = { ...val };
+  const boolKeys = ['track_batch', 'track_expiry', 'is_pesticide', 'show_public_price', 'is_published', 'is_featured', 'is_active'] as const;
+  for (const b of boolKeys) {
+    if (d[b] !== undefined && d[b] !== null) {
+      if (typeof d[b] === 'number') d[b] = d[b] !== 0;
+      else if (typeof d[b] === 'string') {
+        const s = d[b].trim().toLowerCase();
+        d[b] = s === '1' || s === 'true' || s === 'yes';
+      } else {
+        d[b] = Boolean(d[b]);
+      }
+    }
+  }
+  if (d.conversion_ratio_milli !== undefined) {
+    const cr = Number(d.conversion_ratio_milli);
+    d.conversion_ratio_milli = cr > 0 ? Math.round(cr) : 1000;
+  }
+  if (d.purchase_rate_paisa !== undefined) d.purchase_rate_paisa = Math.max(0, Math.round(Number(d.purchase_rate_paisa) || 0));
+  if (d.sale_rate_paisa !== undefined) d.sale_rate_paisa = Math.max(0, Math.round(Number(d.sale_rate_paisa) || 0));
+  if (d.public_price_paisa !== undefined) d.public_price_paisa = Math.max(0, Math.round(Number(d.public_price_paisa) || 0));
+  if (d.tax_pct_milli !== undefined) d.tax_pct_milli = Math.max(0, Math.round(Number(d.tax_pct_milli) || 0));
+  if (d.reorder_level_milli !== undefined) d.reorder_level_milli = Math.max(0, Math.round(Number(d.reorder_level_milli) || 0));
+  if (d.grams_per_base_unit !== undefined) d.grams_per_base_unit = Math.max(0, Math.round(Number(d.grams_per_base_unit) || 0));
+  if (d.brand_id !== undefined && (!d.brand_id || d.brand_id === '—')) d.brand_id = null;
+  if (d.availability_mode !== undefined) {
+    const am = String(d.availability_mode).toUpperCase();
+    d.availability_mode = ['AUTO', 'ALWAYS', 'CALL'].includes(am) ? am : 'AUTO';
+  }
+  if (d.season !== undefined) {
+    const sn = String(d.season).toUpperCase();
+    d.season = ['KHARIF', 'RABI', 'NONE'].includes(sn) ? sn : 'NONE';
+  }
+  return d;
+}, productObjectSchema.partial());
 export type ProductInput = z.infer<typeof productSchema>;
 
 export const categorySchema = z.object({
   code: z.string().min(1).max(30), name_ur: z.string().min(1), name_en: z.string().default(''),
-  slug: z.string().min(1), parent_id: id.nullable().optional(), book_code: bookCodes.optional(),
-  icon: z.string().optional(), sort: z.number().int().default(0), is_active: z.boolean().default(true),
+  slug: z.string().min(1), parent_id: optionalId, book_code: bookCodes.optional(),
+  icon: z.string().optional(), sort: z.number().int().default(0), is_active: flexibleBoolean(true),
 });
-export const brandSchema = z.object({ name_ur: z.string().min(1), name_en: z.string().default(''), is_active: z.boolean().default(true) });
+export const brandSchema = z.preprocess((val: any) => {
+  if (typeof val !== 'object' || val === null) return val;
+  const d = { ...val };
+  if (!d.name_ur && d.name_en) d.name_ur = String(d.name_en).trim();
+  if (!d.name_en && d.name_ur) d.name_en = String(d.name_ur).trim();
+  if (!d.name_ur) d.name_ur = 'عام برانڈ';
+  if (!d.name_en) d.name_en = d.name_ur;
+  if (d.is_active === undefined) d.is_active = true;
+  return d;
+}, z.object({ name_ur: z.string().min(1), name_en: z.string().default(''), is_active: flexibleBoolean(true) }));
 
-export const partySchema = z.object({
+export const partySchema = z.preprocess((val: any) => {
+  if (typeof val !== 'object' || val === null) return val;
+  const d = { ...val };
+  if (!d.name_ur && d.name_en) d.name_ur = String(d.name_en).trim();
+  if (!d.name_en && d.name_ur) d.name_en = String(d.name_ur).trim();
+  if (!d.name_ur) d.name_ur = 'فریق';
+  if (!d.name_en) d.name_en = d.name_ur;
+  d.phone = d.phone ? String(d.phone).trim() : '';
+  d.village = d.village ? String(d.village).trim() : '';
+  d.notes = d.notes ? String(d.notes).trim() : '';
+  d.type = d.type || 'CUSTOMER';
+  d.opening_balance_paisa = Math.round(Number(d.opening_balance_paisa) || 0);
+  d.credit_limit_paisa = Math.max(0, Math.round(Number(d.credit_limit_paisa) || 0));
+  return d;
+}, z.object({
   name_ur: z.string().min(1).max(160), name_en: z.string().max(160).default(''),
   phone: z.string().max(30).default(''), village: z.string().max(200).default(''),
   type: z.enum(['CUSTOMER', 'SUPPLIER', 'FARMER', 'EMPLOYEE']),
@@ -104,10 +232,10 @@ export const partySchema = z.object({
   opening_direction: z.enum(['RECEIVABLE', 'PAYABLE']).default('RECEIVABLE'),
   opening_date: dateStr.optional(),
   credit_limit_paisa: nonnegPaisa.default(0),
-  cnic: z.string().max(30).optional(),
+  cnic: z.string().max(30).optional().nullable().transform((v) => v || undefined),
   notes: z.string().max(1000).default(''),
-  is_active: z.boolean().default(true),
-});
+  is_active: flexibleBoolean(true),
+}));
 export type PartyInput = z.infer<typeof partySchema>;
 
 const paymentPart = z.object({ account_id: id, amount_paisa: nonnegPaisa });
@@ -289,6 +417,7 @@ export const syncOperationSchema = z.object({
   type: z.enum(['SALE', 'PURCHASE', 'GRAIN_PURCHASE', 'GRAIN_SALE', 'RECEIPT', 'PAYMENT', 'EXPENSE', 'PARTY']),
   payload: z.record(z.unknown()), local_time: z.string().min(1),
 });
+export type SyncOperation = z.infer<typeof syncOperationSchema>;
 export const periodCloseSchema = z.object({ ym: ymStr, reason: z.string().min(2) });
 export const reconcileSchema = z.object({
   account_id: id, period: ymStr, statement_balance_paisa: paisa,
@@ -303,11 +432,16 @@ export const importSchema = z.object({
 /** Admin-maintained payment instructions. Account/QR details are owner-entered, never invented. */
 export const paymentMethodSchema = z.object({
   kind: z.enum(['BANK', 'EASYPAISA', 'JAZZCASH', 'WALLET', 'CASH']),
-  title_ur: z.string().min(1).max(120), title_en: z.string().max(120).default(''),
-  bank_name: z.string().max(120).default(''), account_title: z.string().max(160).default(''),
-  account_number: z.string().max(40).default(''), iban: z.string().max(40).default(''),
-  mobile_number: z.string().max(30).default(''), instructions_ur: z.string().max(600).default(''),
-  account_id: id.nullable().optional(), is_active: z.boolean().default(true),
+  title_ur: z.string().min(1).max(120),
+  title_en: z.string().max(120).optional().nullable().transform((v) => v ?? ''),
+  bank_name: z.string().max(120).optional().nullable().transform((v) => v ?? ''),
+  account_title: z.string().max(160).optional().nullable().transform((v) => v ?? ''),
+  account_number: z.string().max(40).optional().nullable().transform((v) => v ?? ''),
+  iban: z.string().max(40).optional().nullable().transform((v) => v ?? ''),
+  mobile_number: z.string().max(30).optional().nullable().transform((v) => v ?? ''),
+  instructions_ur: z.string().max(600).optional().nullable().transform((v) => v ?? ''),
+  account_id: optionalId,
+  is_active: flexibleBoolean(true),
   sort: z.number().int().default(0),
 });
 export type PaymentMethodInput = z.infer<typeof paymentMethodSchema>;
@@ -340,8 +474,8 @@ export const proofSchema = z.object({
 export type ProofInput = z.infer<typeof proofSchema>;
 
 export const orderDecisionSchema = z.object({
-  paid: z.boolean().default(true),
-  mark_proof_accepted: z.boolean().default(true),
+  paid: flexibleBoolean(true),
+  mark_proof_accepted: flexibleBoolean(true),
   note: z.string().max(500).default(''),
   idempotency_key: z.string().max(100).optional(),
 });

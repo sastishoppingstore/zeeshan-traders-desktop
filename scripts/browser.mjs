@@ -17,8 +17,8 @@ const NATIVE = ['ZT_CHROME', 'CHROME_PATH'].map((k) => process.env[k]).find(Bool
 
 function launchNative(executablePath) {
   return playwright.launch({
-    executablePath, headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none'],
+    executablePath, headless: true, chromiumSandbox: false,
+    args: ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none', '--disable-crash-reporter', '--no-zygote', '--disable-quic'],
     env: { ...process.env, HOME: process.env.HOME ?? tmpdir() },
   });
 }

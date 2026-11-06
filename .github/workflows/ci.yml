@@ -29,5 +29,7 @@ jobs:
           diff -q /tmp/seed-before.sql migrations/0002_system_seed.sql
       - name: Upload query-plan report
         if: always()
+        # Reporting only: a full artifact-storage quota must not fail an otherwise green verify.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with: { name: query-plan-report, path: .dev/query-plan-report.json }

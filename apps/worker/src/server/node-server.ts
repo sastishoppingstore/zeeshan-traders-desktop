@@ -32,7 +32,11 @@ else {
 const dbPath = process.env.ZT_DB ?? path.join(DEV_DIR, 'zt.db');
 const sqlite = openLocalDatabase(dbPath);
 for (const f of readdirSync(path.join(ROOT, 'migrations')).filter((f) => f.endsWith('.sql')).sort()) {
-  sqlite.exec(readFileSync(path.join(ROOT, 'migrations', f), 'utf8'));
+  try {
+    sqlite.exec(readFileSync(path.join(ROOT, 'migrations', f), 'utf8'));
+  } catch (err: any) {
+    if (!err.message?.includes('duplicate column')) throw err;
+  }
 }
 
 const env: any = {

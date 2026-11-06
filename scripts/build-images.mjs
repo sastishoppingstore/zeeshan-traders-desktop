@@ -17,12 +17,12 @@ const OUT = join(ROOT, flag('out', 'apps/web/public/images'));
 
 // Largest variant is `lg`; `md` is small-screen; `sm` is icon/thumb.
 const SIZES = {
-  hero: [{ key: 'lg', width: 1600 }, { key: 'md', width: 900 }],
-  categories: [{ key: 'lg', width: 760 }, { key: 'md', width: 420 }, { key: 'sm', width: 160 }],
-  products: [{ key: 'lg', width: 760 }, { key: 'md', width: 360 }],
-  about: [{ key: 'lg', width: 1100 }, { key: 'md', width: 560 }, { key: 'sm', width: 120 }],
+  hero: [{ key: 'lg', width: 1280 }, { key: 'md', width: 720 }],
+  categories: [{ key: 'lg', width: 600 }, { key: 'md', width: 340 }, { key: 'sm', width: 140 }],
+  products: [{ key: 'lg', width: 600 }, { key: 'md', width: 320 }],
+  about: [{ key: 'lg', width: 840 }, { key: 'md', width: 460 }, { key: 'sm', width: 120 }],
 };
-const QUALITY = 62;
+const QUALITY = 55;
 
 const groups = readdirSync(SRC, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
 const registry = {};
@@ -53,7 +53,7 @@ for (const group of groups) {
       const info = await sharp(input)
         .rotate()
         .resize({ width, height: Math.round(width * 0.85), fit: 'cover', withoutEnlargement: true })
-        .webp({ quality: key === 'md' ? 60 : QUALITY, effort: 4, metadata: false })
+        .webp({ quality: key === 'sm' ? 50 : key === 'md' ? 52 : QUALITY, effort: 6, metadata: false })
         .toFile(out);
       totalBytes += info.size;
       fileCount += 1;

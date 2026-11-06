@@ -36,6 +36,8 @@ export interface AppVars {
   db: DB;
   user?: SessionUser;
   session_id?: string;
+  /** Set when the session token came from `Authorization: Bearer` rather than a cookie. */
+  bearer?: boolean;
 }
 
 export type AppContext = Context<{ Bindings: AppEnv; Variables: AppVars }>;
@@ -53,8 +55,13 @@ export function ok<T>(c: AppContext, data: T, status = 200) {
   return c.json({ ok: true, data }, status as any);
 }
 
-export function fail(c: AppContext, status: number, code: string, message_ur: string, message_en: string, field_errors?: Record<string, string>) {
-  const error: ApiError = { code, message_ur, message_en, ...(field_errors ? { field_errors } : {}) };
+export function fail(c: AppContext, status: number, code: string, message_ur: string, message_en: string,
+  field_errors?: Record<string, string>, current?: unknown) {
+  const error: ApiError = {
+    code, message_ur, message_en,
+    ...(field_errors ? { field_errors } : {}),
+    ...(current !== undefined ? { current } : {}),
+  };
   return c.json({ ok: false, error }, status as any);
 }
 
@@ -65,7 +72,11 @@ export function fieldErrors(e: ZodError): Record<string, string> {
 }
 
 export function badRequest(c: AppContext, e: ZodError) {
-  return fail(c, 400, 'VALIDATION_ERROR', 'درج کردہ معلومات درست نہیں ہیں', 'Validation failed', fieldErrors(e));
+  const fields = fieldErrors(e);
+  const details = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('; ');
+  const urMsg = details ? `درج کردہ معلومات درست نہیں ہیں (${details})` : 'درج کردہ معلومات درست نہیں ہیں';
+  const enMsg = details ? `Validation failed (${details})` : 'Validation failed';
+  return fail(c, 400, 'VALIDATION_ERROR', urMsg, enMsg, fields);
 }
 
 export function serverError(c: AppContext, e: unknown) {
@@ -82,6 +93,8 @@ export class BizError extends Error {
     public ur: string,
     public en: string,
     public fields?: Record<string, string>,
+    /** 409 VERSION_CONFLICT carries the row the client collided with. */
+    public current?: unknown,
   ) { super(en); }
 }
 
@@ -94,9 +107,38 @@ export function handle(c: AppContext, fn: () => Promise<Response> | Response): P
 }
 
 export function mapError(c: AppContext, e: unknown): Response {
-  if (e instanceof BizError) return fail(c, e.status, e.code, e.ur, e.en, e.fields);
+  if (e instanceof BizError) return fail(c, e.status, e.code, e.ur, e.en, e.fields, e.current);
   if (e instanceof ZodError) return badRequest(c, e);
   return serverError(c, e);
+}
+
+/**
+ * Optimistic lock for the normal (non-/sync) endpoints.
+ *
+ * The desktop pushes rows through /sync/rows/push, but the web still calls PUT/DELETE directly. Those
+ * must present the version they read too, or a web edit and an offline edit silently clobber each
+ * other. A missing base_version keeps the old behaviour for callers that have not been updated yet
+ * (and for the public site, which never writes) — an explicit one is always enforced.
+ *
+ * Returns the row as it is now, or null when it does not exist.
+ */
+export async function assertRowVersion(
+  db: DB, table: string, idCol: string, id: string, baseVersion: unknown,
+): Promise<any> {
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE ${idCol} = ?`).bind(id).first<any>();
+  if (!row) return null;
+  if (baseVersion !== undefined && baseVersion !== null && baseVersion !== '') {
+    const n = Number(baseVersion);
+    if (!Number.isInteger(n) || n < 0) {
+      throw new BizError(400, 'INVALID_VERSION', 'ورژن درست نہیں', 'base_version must be a non-negative integer');
+    }
+    if (n !== Number(row.version)) {
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ ریکارڈ تبدیل کیا ہے — تازہ ترین معلومات دیکھ کر دوبارہ کوشش کریں',
+        'This record changed elsewhere — reload the latest values and try again', undefined, row);
+    }
+  }
+  return row;
 }
 
 // ---------------------------------- Settings ---------------------------------
@@ -106,9 +148,12 @@ export async function getSetting<T = unknown>(db: DB, key: string): Promise<T | 
   try { return JSON.parse(row.value) as T; } catch { return row.value as unknown as T; }
 }
 
+// version is bumped here too: business_settings is row-synced, so a web edit must move the
+// optimistic lock or a desktop pushing against the version it read would overwrite it blindly.
 export async function setSetting(db: DB, key: string, value: unknown, userId: string | null): Promise<void> {
-  await db.prepare(`INSERT INTO business_settings (key,value,updated_at,updated_by) VALUES (?,?,?,?)
-    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by`)
+  await db.prepare(`INSERT INTO business_settings (key,value,updated_at,updated_by,version) VALUES (?,?,?,?,1)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at,
+      updated_by=excluded.updated_by, version=business_settings.version+1`)
     .bind(key, JSON.stringify(value), nowIso(), userId).run();
 }
 
@@ -222,32 +267,45 @@ export async function resolveSession(db: DB, token: string | null): Promise<Sess
   };
 }
 
+/** The session token may arrive as an HttpOnly cookie (web) or an Authorization header (desktop).
+ *  A `file://` Electron renderer has no cookie jar, so Bearer is the only transport that works for
+ *  it — see DESKTOP_README.md. Requests that carry no cookies cannot be forged cross-site, which is
+ *  why CSRF is enforced for the cookie path only. */
+export function sessionToken(c: AppContext): { token: string | null; via: 'cookie' | 'bearer' } {
+  const header = c.req.header('authorization');
+  const m = header ? /^Bearer\s+(.+)$/i.exec(header.trim()) : null;
+  if (m?.[1]) return { token: m[1], via: 'bearer' };
+  return { token: cookieValue(c, 'zt_session'), via: 'cookie' };
+}
+
 /** Deny-by-default auth + CSRF middleware for /api/v1/* (public routes excluded by the caller). */
 export const requireAuth: AppMiddleware = async (c, next) => {
   const db = c.get('db')!;
-  const user = await resolveSession(db, cookieValue(c, 'zt_session'));
+  const { token, via } = sessionToken(c);
+  const user = await resolveSession(db, token);
   if (!user) return fail(c, 401, 'UNAUTHENTICATED', 'براہِ کرم دوبارہ لاگ ان کریں', 'Please log in again');
   const method = c.req.method.toUpperCase();
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+  if (via === 'cookie' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     const header = c.req.header('x-csrf-token');
     if (!header || header !== user.csrf) return fail(c, 403, 'CSRF_FAILED', 'سیکیورٹی ٹوکن غائب یا غلط ہے', 'CSRF token missing or invalid');
   }
+  c.set('bearer', via === 'bearer');
   const device = user.device_id;
   if (device) {
     const d = await db.prepare('SELECT revoked_at FROM devices WHERE id=?').first<{ revoked_at: string | null }>(device);
     if (d?.revoked_at) return fail(c, 403, 'DEVICE_REVOKED', 'یہ ڈیوائس بند کر دی گئی ہے', 'This device has been revoked');
   }
   c.set('user', user);
-  await db.prepare('UPDATE sessions SET last_seen=? WHERE token_hash=?').bind(nowIso(), await sha256(cookieValue(c, 'zt_session')!)).run();
+  await db.prepare('UPDATE sessions SET last_seen=? WHERE token_hash=?').bind(nowIso(), await sha256(token!)).run();
   await next();
 };
 
-export function requirePerm(permission: string): AppMiddleware {
+export function requirePerm(...permissions: string[]): AppMiddleware {
   return async (c, next) => {
     const u = c.get('user');
     if (!u) return fail(c, 401, 'UNAUTHENTICATED', 'لاگ ان ضروری ہے', 'Login required');
-    if (!u.permissions.includes('*') && !u.permissions.includes(permission)) {
-      return fail(c, 403, 'PERMISSION_DENIED', 'آپ کو اس کام کی اجازت نہیں ہے', `Permission denied: ${permission}`);
+    if (!u.permissions.includes('*') && !permissions.some((p) => u.permissions.includes(p))) {
+      return fail(c, 403, 'PERMISSION_DENIED', 'آپ کو اس کام کی اجازت نہیں ہے', `Permission denied: ${permissions.join(' or ')}`);
     }
     await next();
   };

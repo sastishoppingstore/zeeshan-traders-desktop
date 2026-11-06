@@ -12,15 +12,20 @@ export interface Harness {
   app: ReturnType<typeof createApp>;
   env: AppEnv;
   sqlite: DatabaseSync;
-  call(method: string, url: string, body?: unknown, opts?: { cookie?: string; csrf?: string; ip?: string }): Promise<{ status: number; json: any; headers: Headers }>;
+  call(method: string, url: string, body?: unknown, opts?: { cookie?: string; csrf?: string; ip?: string; bearer?: boolean }): Promise<{ status: number; json: any; headers: Headers }>;
   setupToken: string;
   session: { cookie: string; csrf: string } | null;
+  /** The session `setup()` created. Suites that log in as another role must hand it back with
+   *  asOwner() or every later request in the file runs with that role's permissions. */
+  asOwner(): void;
+  token(): string;
   setup(payload?: Record<string, unknown>): Promise<any>;
   login(username: string, password: string): Promise<any>;
 }
 
 export function makeHarness(): Harness {
   const sqlite = openLocalDatabase(':memory:');
+  let ownerSession: { cookie: string; csrf: string } | null = null;
   for (const f of readdirSync(path.join(ROOT, 'migrations')).filter((f) => f.endsWith('.sql')).sort()) {
     sqlite.exec(readFileSync(path.join(ROOT, 'migrations', f), 'utf8'));
   }
@@ -39,11 +44,22 @@ export function makeHarness(): Harness {
   const app = createApp();
   const h: Harness = {
     app, env, sqlite, setupToken, session: null,
+    token() {
+      const m = /zt_session=([^;]+)/.exec(h.session?.cookie ?? '');
+      if (!m) throw new Error('no session token — call setup() or login() first');
+      return m[1];
+    },
     async call(method, url, body, opts = {}) {
       const headers = new Headers({ 'Content-Type': 'application/json' });
       if (opts.ip) headers.set('cf-connecting-ip', opts.ip);
-      if (opts.cookie ?? h.session?.cookie) headers.set('Cookie', opts.cookie ?? h.session!.cookie);
-      if (opts.csrf ?? h.session?.csrf) headers.set('x-csrf-token', opts.csrf ?? h.session!.csrf);
+      if (opts.bearer) {
+        // Desktop path: token in the header, deliberately NO cookie and NO CSRF header, which is
+        // exactly what an Electron main-process request over file:// looks like.
+        headers.set('Authorization', `Bearer ${h.token()}`);
+      } else {
+        if (opts.cookie ?? h.session?.cookie) headers.set('Cookie', opts.cookie ?? h.session!.cookie);
+        if (opts.csrf ?? h.session?.csrf) headers.set('x-csrf-token', opts.csrf ?? h.session!.csrf);
+      }
       const req = new Request(`https://zt.test${url}`, {
         method, headers, body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -65,8 +81,10 @@ export function makeHarness(): Harness {
       });
       if (res.status !== 201) throw new Error(`setup failed ${res.status}: ${JSON.stringify(res.json)}`);
       h.session = { cookie: extractCookie(res.headers), csrf: res.json.data.csrf };
+      ownerSession = h.session;
       return res.json.data;
     },
+    asOwner() { h.session = ownerSession; },
     async login(username, password) {
       const res = await h.call('POST', '/api/v1/auth/login', { username, password }, { cookie: '', csrf: '' });
       if (res.status !== 200) throw new Error(`login failed ${res.status}: ${JSON.stringify(res.json)}`);

@@ -1,0 +1,192 @@
+# Builds the Windows desktop installer (electron-builder NSIS, x64) on a real Windows
+# runner, because better-sqlite3 must be compiled against Electron's Windows ABI.
+#
+# API origin — baked into the installer, public by design. It defaults to the live
+# production Worker so a tag push always produces a working package; set the repository
+# *variable* DESKTOP_API_URL (Settings → Secrets and variables → Actions → Variables) to
+# point a build somewhere else. Variables are not secrets: the value ends up inside the
+# public installer and is visible to anyone who unpacks the asar.
+#   DESKTOP_API_URL   the deployed Worker origin the desktop app talks to,
+#                     e.g. https://<worker-name>.workers.dev
+#                     (no trailing path — the app appends /api/v1 itself).
+#
+# Code signing is intentionally OFF. There is no certificate, no PAT and no secret in
+# this file; see the inert `electronBuilderSigningPlaceholder` field in package.json for
+# how to turn signing on later. Unsigned installers trigger a SmartScreen warning the
+# first time each machine runs them — expected until a cert exists.
+#
+# Manual run: Actions → "Build Desktop (Windows installer)" → Run workflow → produces a
+# workflow artifact only. Pushing a `v*` tag produces the artifact AND the GitHub Release.
+
+name: Build Desktop (Windows installer)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # softprops/action-gh-release needs this to create/attach the Release
+
+concurrency:
+  group: desktop-win-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: windows x64 (NSIS)
+    runs-on: windows-latest
+    env:
+      # BUILD_TARGET switches Vite to the static desktop export (base './' + out/).
+      BUILD_TARGET: desktop
+      # The desktop origin, public by design. It is *baked into the package* by
+      # scripts/write-desktop-config.mjs (out/desktop-config.json) because an installed app has no
+      # access to the runner's environment; config.cjs reads that file at runtime.
+      # Repository variable wins; otherwise fall back to the live production Worker so a build
+      # never ships an app that talks to nothing.
+      DESKTOP_API_URL: ${{ vars.DESKTOP_API_URL || 'https://zt-v2.sastishopping-store.workers.dev' }}
+      # Keep Electron + electron-builder downloads inside the workspace so actions/cache
+      # can restore them (npm ci wipes node_modules, so caching it in-place would not work).
+      ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.cache\electron-builder
+      # better-sqlite3 / node-gyp need a compiler: use the Visual Studio toolchain the
+      # windows-latest image already ships instead of downloading one.
+      GYP_MSVS_VERSION: '2022'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail before the slow install/build if the app would ship talking to nothing.
+      - name: Guard — DESKTOP_API_URL must be configured
+        shell: bash
+        run: |
+          if [ -z "${DESKTOP_API_URL:-}" ]; then
+            echo "::error::vars.DESKTOP_API_URL is not set. Add it under Settings -> Secrets and variables -> Actions -> Variables. Refusing to build a desktop app that talks to nothing."
+            exit 1
+          fi
+          case "$DESKTOP_API_URL" in
+            https://*|http://localhost*) : ;;
+            *) echo "::error::DESKTOP_API_URL must start with https:// (or http://localhost for a dev run), got: $DESKTOP_API_URL"; exit 1 ;;
+          esac
+          echo "Desktop API origin: $DESKTOP_API_URL" # public value, safe to log
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Cache Electron + electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/electron
+            .cache/electron-builder
+          key: ${{ runner.os }}-electron-dl-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-dl-
+
+      - name: Install dependencies (lockfile-exact)
+        run: npm ci
+
+      # Run the suite while better-sqlite3 is still built for Node. Once it is rebuilt for
+      # Electron's ABI it cannot load under plain Node, and the driver would fall back to
+      # node:sqlite — experimental on Node 22, hence the flag. Testing before the rebuild keeps
+      # the real native module in play.
+      - name: Test suite first — a broken build never ships
+        env:
+          NODE_OPTIONS: --experimental-sqlite
+        run: npm test
+
+      - name: Resolve the installed Electron version (native-module cache key)
+        id: electron
+        shell: bash
+        run: echo "version=$(node -p "require('electron/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # The expensive step: better-sqlite3 compiled for this Electron's ABI. Keyed on OS +
+      # lockfile (node_modules) hash + Electron version. Restored after npm ci, which wipes
+      # node_modules, so the compiled build/ dir lands back where electron-builder expects it.
+      - name: Cache rebuilt better-sqlite3
+        id: native
+        uses: actions/cache@v4
+        with:
+          path: node_modules/better-sqlite3/build
+          key: ${{ runner.os }}-better-sqlite3-electron${{ steps.electron.outputs.version }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-better-sqlite3-electron${{ steps.electron.outputs.version }}-
+
+      - name: Rebuild native modules against Electron's ABI
+        if: steps.native.outputs.cache-hit != 'true'
+        run: npm run rebuild:native
+
+      - name: Build the desktop web bundle into out/
+        run: npm run build:desktop
+
+      - name: Bake the API origin into the package
+        run: node scripts/write-desktop-config.mjs --required
+
+      - name: Verify out/ is a file://-safe static export
+        shell: bash
+        run: |
+          test -f out/index.html || { echo "::error::out/index.html missing — desktop export did not build"; exit 1; }
+          grep -q 'src="./assets/' out/index.html || { echo "::error::out/index.html has no relative ./assets/ references"; exit 1; }
+          if grep -qE 'src="/assets/|href="/assets/' out/index.html; then
+            echo "::error::out/index.html still uses absolute asset paths (base must be './')"; exit 1
+          fi
+          test -d electron || echo "::warning::electron/ (main.cjs/preload.cjs/db.cjs/sync.cjs) is not in the tree yet — electron-builder will fail on the missing entry point"
+          echo "Desktop export OK: relative assets only."
+
+      - name: Package the Windows installer
+        id: dist
+        run: npm run dist:win
+
+      - name: Assert the installer exists
+        shell: bash
+        run: |
+          ls -la dist/*.exe || { echo "::error::no .exe produced under dist/"; exit 1; }
+
+      # Tag builds attach the .exe to a Release, which does not consume artifact storage. Uploading
+      # it here as well used to fail the whole job when the account's artifact quota was full, so
+      # tag runs skip this and non-tag runs tolerate a quota rejection.
+      - name: Upload installer (workflow artifact)
+        if: ${{ github.ref_type != 'tag' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: zeeshan-traders-win-x64
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+          if-no-files-found: error
+          retention-days: 30
+
+      # Diagnostics only when the packaging actually failed (always() so it also runs when
+      # a later step is skipped; never on a green build).
+      - name: Upload electron-builder log (on failure)
+        if: ${{ always() && steps.dist.outcome != 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-builder-log-${{ github.run_id }}
+          path: |
+            dist/builder-debug.yml
+            .cache/electron-builder
+            ~/.cache/electron-builder
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Tag pushes only: attaches the .exe to the Release for this tag, creating it if the
+      # owner has not made one. Uses the built-in workflow token — no PAT, no secret.
+      - name: Publish GitHub Release with the installer
+        if: ${{ github.ref_type == 'tag' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          body: |
+            Windows x64 installer for Zeeshan Traders (ذیشان ٹریڈرز) desktop.
+
+            API origin baked in: `${{ env.DESKTOP_API_URL }}`
+
+            Unsigned build — Windows SmartScreen will warn on first run until a code
+            signing certificate is configured (see package.json signing placeholder).

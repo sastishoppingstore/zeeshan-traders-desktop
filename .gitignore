@@ -19,3 +19,7 @@ images/
 # Local IDE / tool settings and TS build cache
 .qoder/
 *.tsbuildinfo
+# Desktop (Electron) build artifacts. `out/` is the Vite static export electron-builder
+# packs; the NSIS installer + win-unpacked land under dist/, already ignored above.
+out/
+.cache/
