@@ -5,6 +5,9 @@ export interface ApiError {
   message_ur: string;
   message_en: string;
   field_errors?: Record<string, string>;
+  /** Present on a 409 VERSION_CONFLICT: the row as the server has it now, so the client can show
+   *  the latest values and retry against its version without an extra round-trip. */
+  current?: unknown;
 }
 
 export interface ApiOk<T> {

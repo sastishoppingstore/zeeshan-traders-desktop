@@ -55,8 +55,13 @@ export function ok<T>(c: AppContext, data: T, status = 200) {
   return c.json({ ok: true, data }, status as any);
 }
 
-export function fail(c: AppContext, status: number, code: string, message_ur: string, message_en: string, field_errors?: Record<string, string>) {
-  const error: ApiError = { code, message_ur, message_en, ...(field_errors ? { field_errors } : {}) };
+export function fail(c: AppContext, status: number, code: string, message_ur: string, message_en: string,
+  field_errors?: Record<string, string>, current?: unknown) {
+  const error: ApiError = {
+    code, message_ur, message_en,
+    ...(field_errors ? { field_errors } : {}),
+    ...(current !== undefined ? { current } : {}),
+  };
   return c.json({ ok: false, error }, status as any);
 }
 
@@ -88,6 +93,8 @@ export class BizError extends Error {
     public ur: string,
     public en: string,
     public fields?: Record<string, string>,
+    /** 409 VERSION_CONFLICT carries the row the client collided with. */
+    public current?: unknown,
   ) { super(en); }
 }
 
@@ -100,9 +107,38 @@ export function handle(c: AppContext, fn: () => Promise<Response> | Response): P
 }
 
 export function mapError(c: AppContext, e: unknown): Response {
-  if (e instanceof BizError) return fail(c, e.status, e.code, e.ur, e.en, e.fields);
+  if (e instanceof BizError) return fail(c, e.status, e.code, e.ur, e.en, e.fields, e.current);
   if (e instanceof ZodError) return badRequest(c, e);
   return serverError(c, e);
+}
+
+/**
+ * Optimistic lock for the normal (non-/sync) endpoints.
+ *
+ * The desktop pushes rows through /sync/rows/push, but the web still calls PUT/DELETE directly. Those
+ * must present the version they read too, or a web edit and an offline edit silently clobber each
+ * other. A missing base_version keeps the old behaviour for callers that have not been updated yet
+ * (and for the public site, which never writes) — an explicit one is always enforced.
+ *
+ * Returns the row as it is now, or null when it does not exist.
+ */
+export async function assertRowVersion(
+  db: DB, table: string, idCol: string, id: string, baseVersion: unknown,
+): Promise<any> {
+  const row = await db.prepare(`SELECT * FROM ${table} WHERE ${idCol} = ?`).bind(id).first<any>();
+  if (!row) return null;
+  if (baseVersion !== undefined && baseVersion !== null && baseVersion !== '') {
+    const n = Number(baseVersion);
+    if (!Number.isInteger(n) || n < 0) {
+      throw new BizError(400, 'INVALID_VERSION', 'ورژن درست نہیں', 'base_version must be a non-negative integer');
+    }
+    if (n !== Number(row.version)) {
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ ریکارڈ تبدیل کیا ہے — تازہ ترین معلومات دیکھ کر دوبارہ کوشش کریں',
+        'This record changed elsewhere — reload the latest values and try again', undefined, row);
+    }
+  }
+  return row;
 }
 
 // ---------------------------------- Settings ---------------------------------

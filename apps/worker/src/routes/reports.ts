@@ -50,13 +50,9 @@ export function registerReports(app: H) {
         gross_profit_paisa: sum(s.filter((x) => x.metric === 'SALE'), 'paisa') - sum(s.filter((x) => x.metric === 'COGS'), 'paisa'),
       };
     });
-    const recent = await db.prepare(`SELECT * FROM (
-      SELECT id,number,date,'SALE' kind,total_paisa amount_paisa,party_id,created_at FROM sales WHERE status='POSTED'
-      UNION ALL SELECT id,number,date,'PURCHASE',total_paisa,party_id,created_at FROM purchases WHERE status='POSTED'
-      UNION ALL SELECT id,number,date,'RECEIPT',amount_paisa,party_id,created_at FROM receipts
-      UNION ALL SELECT id,number,date,'PAYMENT',amount_paisa,party_id,created_at FROM payments
-      UNION ALL SELECT id,number,date,'EXPENSE',amount_paisa,NULL,created_at FROM expenses
-    ) ORDER BY created_at DESC LIMIT 10`).all<any>();
+    const recent = await db.prepare(
+      `SELECT id,number,date,type AS kind,amount_paisa,party_id,created_at FROM documents ORDER BY created_at DESC LIMIT 15`
+    ).all<any>();
     const alerts = await db.prepare(`SELECT 'LOW_STOCK' type,p.name_ur title_ur FROM products p
       JOIN stock_balance sb ON sb.product_id=p.id WHERE p.reorder_level_milli>0 AND sb.qty_milli<p.reorder_level_milli LIMIT 20`).all<any>();
     const nearDays = (await getSetting<number>(db, 'near_expiry_days')) ?? 90;
@@ -67,6 +63,10 @@ export function registerReports(app: H) {
       .bind(String(nearDays)).all<any>();
     const counts = {
       pending_enquiries: (await db.prepare("SELECT COUNT(*) n FROM website_enquiries WHERE status='NEW'").first<{ n: number }>())?.n ?? 0,
+      pending_orders: (await db.prepare("SELECT COUNT(*) n FROM orders WHERE status='NEW'").first<{ n: number }>())?.n ?? 0,
+      total_orders: (await db.prepare("SELECT COUNT(*) n FROM orders").first<{ n: number }>())?.n ?? 0,
+      total_products: (await db.prepare("SELECT COUNT(*) n FROM products WHERE deleted=0").first<{ n: number }>())?.n ?? 0,
+      total_stock_value: (await db.prepare("SELECT COALESCE(SUM(value_paisa),0) v FROM stock_balance").first<{ v: number }>())?.v ?? 0,
       pending_sync: (await db.prepare("SELECT COUNT(*) n FROM sync_operations WHERE status IN ('PENDING','CONFLICT')").first<{ n: number }>())?.n ?? 0,
       conflicts: (await db.prepare("SELECT COUNT(*) n FROM sync_conflicts WHERE status='OPEN'").first<{ n: number }>())?.n ?? 0,
     };
@@ -77,10 +77,14 @@ export function registerReports(app: H) {
     const charts = await db.prepare(`SELECT date,metric,SUM(value_paisa) paisa FROM daily_summary
       WHERE date>=date('now','-30 days') AND metric IN ('SALE','PURCHASE','CASH_IN','CASH_OUT','EXPENSE')
       GROUP BY date,metric ORDER BY date LIMIT 500`).all<any>();
+    const liveTodaySale = (await db.prepare("SELECT COALESCE(SUM(total_paisa),0) s FROM sales WHERE status='POSTED' AND date>=? AND date<=?").bind(from, to).first<{ s: number }>())?.s ?? 0;
+    const liveTodayPurch = (await db.prepare("SELECT COALESCE(SUM(total_paisa),0) p FROM purchases WHERE status='POSTED' AND date>=? AND date<=?").bind(from, to).first<{ p: number }>())?.p ?? 0;
+    const effSalePaisa = Math.max(byMetric('SALE'), liveTodaySale);
+    const effPurchPaisa = Math.max(byMetric('PURCHASE'), liveTodayPurch);
     return ok(c, {
       from, to, accounts, credit,
       today: {
-        sales_paisa: byMetric('SALE'), purchases_paisa: byMetric('PURCHASE'),
+        sales_paisa: effSalePaisa, purchases_paisa: effPurchPaisa,
         collections_paisa: byMetric('CASH_IN'), payments_paisa: byMetric('CASH_OUT'),
         expenses_paisa: byMetric('EXPENSE'), cogs_paisa: byMetric('COGS'),
         gross_profit_paisa: byMetric('SALE') - byMetric('COGS'),

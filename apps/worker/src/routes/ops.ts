@@ -4,7 +4,7 @@ import type { AppContext, AppEnv, AppVars } from '../context.js';
 import type { DB } from '../db.js';
 import {
   ok, fail, handle, me, audit, nowIso, requirePerm, getSetting, setSetting,
-  idempotentResult, BizError, purgePublicCache, getSetting as gs,
+  idempotentResult, BizError, purgePublicCache, getSetting as gs, assertRowVersion,
 } from '../context.js';
 import {
   settingsSchema, syncOperationSchema, saleSchema, purchaseSchema, receiptSchema,
@@ -31,7 +31,8 @@ export function registerOps(app: H) {
     return ok(c, out);
   }));
   app.put('/api/v1/settings', requirePerm('settings.write'), (c) => handle(c, async () => {
-    const body = settingsSchema.parse(await c.req.json());
+    const raw = await c.req.json();
+    const body = settingsSchema.parse(raw);
     const db = c.get('db')!;
     const allowed = new Set([
       'business', 'maund_kg', 'maund_confirmed', 'bag_sizes_confirmed', 'fiscal_year',
@@ -43,11 +44,14 @@ export function registerOps(app: H) {
       'backup_retention', 'hero_tagline', 'period_lock',
     ]);
     if (!allowed.has(body.key)) throw new BizError(400, 'SETTING_NOT_ALLOWED', 'یہ ترتیب قابلِ تبدیلی نہیں', 'Setting is not editable');
+    // business_settings is row-synced: a web tab holding an old version must not overwrite a newer
+    // edit made elsewhere. base_version is stripped by the schema, so it is read from the raw body.
+    const row = await assertRowVersion(db, 'business_settings', 'key', body.key, (raw as any)?.base_version);
     const before = await getSetting(db, body.key);
     await setSetting(db, body.key, body.value, me(c).id);
     await audit(db, 'UPDATE', 'business_settings', body.key, { user_id: me(c).id, before, after: body.value });
     await purgePublicCache();
-    return ok(c, { key: body.key });
+    return ok(c, { key: body.key, version: row ? Number(row.version) + 1 : 1 });
   }));
 
   // ------------------------------- Usage meter --------------------------------

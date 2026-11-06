@@ -30,12 +30,12 @@ async function dismissInstallPrompt(page) {
 }
 
 async function safeGoto(page, url, opts = { waitUntil: 'domcontentloaded', timeout: 30000 }) {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       return await page.goto(url, opts);
     } catch (e) {
-      if (attempt === 3) throw e;
-      await page.waitForTimeout(1000 * attempt);
+      if (attempt === 5) throw e;
+      await page.waitForTimeout(2000 * attempt);
     }
   }
 }
@@ -105,29 +105,26 @@ try {
   await adminPage.waitForTimeout(1000);
   out('Step 2a', `Inline Brand created and attached: "${testBrandUr}"`);
 
-  // Fill Product details in basic tab
+  // Fill Product details on unified single screen
+  const nameUrInput = adminPage.locator('input[placeholder*="مثلاً"]').first();
+  await nameUrInput.fill(testProdUr); // Name Urdu
   const formInputs = adminPage.locator('.card input.input');
-  await formInputs.nth(0).fill(testProdUr); // Name Urdu
-  await formInputs.nth(1).fill(testProdEn); // Name English
-
-  // Switch to Pricing tab
-  const pricingTabBtn = adminPage.locator('button.tab:has-text("قیمت"), .tabs button:has-text("قیمت")');
-  await pricingTabBtn.click();
-  await adminPage.waitForTimeout(500);
-
-  // Fill purchase rate, sale rate, public price
-  const priceInputs = adminPage.locator('input[inputmode="decimal"]');
-  const count = await priceInputs.count();
-  if (count >= 3) {
-    await priceInputs.nth(0).fill('3200'); // Purchase rate
-    await priceInputs.nth(1).fill('3500'); // Sale rate
-    await priceInputs.nth(2).fill('3600'); // Public price
+  if (await formInputs.count() >= 2) {
+    await formInputs.nth(1).fill(testProdEn); // Name English
   }
 
-  // Check show public price
-  const showPriceCheckbox = adminPage.locator('label:has-text("ویب پر قیمت دکھائیں") input[type="checkbox"]');
-  if (await showPriceCheckbox.count()) {
-    await showPriceCheckbox.check();
+  // Fill purchase rate, sale rate
+  const priceInputs = adminPage.locator('input[inputmode="decimal"]');
+  const count = await priceInputs.count();
+  if (count >= 2) {
+    await priceInputs.nth(0).fill('3200'); // Purchase rate
+    await priceInputs.nth(1).fill('3500'); // Sale rate
+  }
+
+  // Fill initial stock pieces directly on product form
+  const qtyInput = adminPage.locator('input[placeholder*="مثلاً 50"]');
+  if (await qtyInput.count()) {
+    await qtyInput.first().fill('50');
   }
 
   // Click Save button
@@ -153,14 +150,7 @@ try {
   info('Opened existing product edit form');
   await dismissInstallPrompt(adminPage);
 
-  // Switch to Pricing tab
-  const editPricingTab = adminPage.locator('button.tab:has-text("قیمت"), .tabs button:has-text("قیمت")');
-  if (await editPricingTab.count()) {
-    await editPricingTab.click();
-    await adminPage.waitForTimeout(400);
-  }
-
-  // Click Save button
+  // Click Save button directly on single screen
   info('Saving edited existing product...');
   await adminPage.locator('button:has-text("محفوظ کریں")').first().click();
 

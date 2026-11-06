@@ -1,7 +1,7 @@
 /** Website CMS, enquiry inbox, sitemap.xml / robots.txt generated from the DB. */
 import type { Hono } from 'hono';
 import type { AppEnv, AppVars } from '../context.js';
-import { ok, fail, handle, me, audit, nowIso, requirePerm, purgePublicCache, BizError } from '../context.js';
+import { ok, fail, handle, me, audit, nowIso, requirePerm, purgePublicCache, BizError, assertRowVersion } from '../context.js';
 import { cmsPageSchema, bannerSchema, announcementSchema, ulid } from '@zt/shared';
 import { sanitizeHtml } from './catalogue.js';
 
@@ -12,20 +12,30 @@ export function registerWebsite(app: H) {
     ok(c, await c.get('db')!.prepare('SELECT * FROM website_pages ORDER BY slug').all())));
 
   app.put('/api/v1/website/pages/:slug', requirePerm('cms.write'), (c) => handle(c, async () => {
-    const body = cmsPageSchema.parse(await c.req.json());
+    const raw = await c.req.json();
+    const body = cmsPageSchema.parse(raw);
     const db = c.get('db')!;
-    const before = await db.prepare('SELECT * FROM website_pages WHERE slug=?').bind(c.req.param('slug')).first<any>();
-    await db.prepare(`INSERT INTO website_pages (slug,title_ur,title_en,body_ur,body_en,status,created_at,updated_at,updated_by,version)
+    const slug = c.req.param('slug');
+    // An existing page is optimistic-locked; creating the first version (no row) is not a conflict.
+    const before = await assertRowVersion(db, 'website_pages', 'slug', slug, (raw as any)?.base_version);
+    const r = await db.prepare(`INSERT INTO website_pages (slug,title_ur,title_en,body_ur,body_en,status,created_at,updated_at,updated_by,version)
       VALUES (?,?,?,?,?,?,?,?,?,1)
       ON CONFLICT(slug) DO UPDATE SET title_ur=excluded.title_ur,title_en=excluded.title_en,
         body_ur=excluded.body_ur,body_en=excluded.body_en,status=excluded.status,
-        updated_at=excluded.updated_at,updated_by=excluded.updated_by,version=website_pages.version+1`)
+        updated_at=excluded.updated_at,updated_by=excluded.updated_by,version=website_pages.version+1
+      WHERE website_pages.version = ?`)
       .bind(body.slug, body.title_ur, body.title_en,
         sanitizeHtml(body.body_ur), sanitizeHtml(body.body_en), body.status,
-        nowIso(), nowIso(), me(c).id).run();
+        nowIso(), nowIso(), me(c).id, before ? before.version : 1).run();
+    if (before && r.changes !== 1) {
+      const current = await db.prepare('SELECT * FROM website_pages WHERE slug=?').bind(slug).first<any>();
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ صفحہ تبدیل کیا ہے — دوبارہ لوڈ کریں',
+        'This page changed elsewhere — reload', undefined, current ?? before);
+    }
     await audit(db, 'UPDATE', 'website_pages', body.slug, { user_id: me(c).id, before, after: body });
     await purgePublicCache();
-    return ok(c, { slug: body.slug, status: body.status });
+    return ok(c, { slug: body.slug, status: body.status, version: before ? before.version + 1 : 1 });
   }));
 
   app.get('/api/v1/website/banners', (c) => handle(c, async () =>

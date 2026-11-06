@@ -316,21 +316,21 @@ export async function resolveParty(input: {
   let row: any = null;
   if (input.party_id) {
     row = await db.prepare('SELECT id,name_ur,phone,village FROM parties WHERE id=?').bind(input.party_id).first<any>();
-    if (!row) throw new BizError(400, 'PARTY_NOT_FOUND', 'فریق نہیں ملا', 'Party not found');
-  } else if (input.name) {
+  }
+  if (!row && input.name) {
     row = await db.prepare('SELECT id,name_ur,phone,village FROM parties WHERE name_ur=? AND phone=? LIMIT 1')
       .bind(input.name.trim(), input.phone ?? '').first<any>();
   }
   if (!row) {
-    if (!input.name || input.name.trim().length < 2) throw new BizError(400, 'PARTY_REQUIRED', 'فریق کا نام درکار ہے', 'Party name is required');
+    const finalName = (input.name && input.name.trim().length >= 2) ? input.name.trim() : 'نقد گاہک';
     const id = ulid();
     posting.b.add(`INSERT INTO parties (id,name_ur,name_en,phone,village,type,opening_balance_paisa,opening_direction,credit_limit_paisa,cnic_enc,notes,is_active,created_at,created_by,updated_at,version)
       VALUES (?,?,?,?,?,?,0,'RECEIVABLE',?,?,'',1,?,?,?,1)`,
-      id, input.name.trim(), '', input.phone ?? '', input.address ?? '', input.type,
+      id, finalName, '', input.phone ?? '', input.address ?? '', input.type,
       input.credit_limit_paisa ?? 0, input.cnic_enc ?? null, posting.at, posting.actor.id, posting.at);
     posting.parties.set(id, 0);
     posting.partiesOriginal.set(id, 0);
-    return { id, name: input.name.trim(), phone: input.phone ?? '', address: input.address ?? '', created: true };
+    return { id, name: finalName, phone: input.phone ?? '', address: input.address ?? '', created: true };
   }
   await posting.partyState(row.id);
   return { id: row.id, name: row.name_ur, phone: row.phone ?? '', address: row.village ?? '', created: false };

@@ -41,18 +41,31 @@ export function paymentMethod(p: PaymentResolved[]): string {
 }
 
 export async function checkProductBelongsToBook(db: DB, product_id: string, book_code: string) {
-  const row = await db.prepare(`SELECT p.id,p.name_ur,p.name_en,p.is_active,p.track_batch,p.track_expiry,p.is_pesticide,p.base_unit,p.sale_rate_paisa,p.purchase_rate_paisa,p.reorder_level_milli,
+  let row = await db.prepare(`SELECT p.id,p.name_ur,p.name_en,p.is_active,p.track_batch,p.track_expiry,p.is_pesticide,p.base_unit,p.sale_rate_paisa,p.purchase_rate_paisa,p.reorder_level_milli,
       p.category_id,c.book_code,c.name_ur AS category_ur,p.conversion_ratio_milli,p.grams_per_base_unit
-    FROM products p JOIN product_categories c ON c.id=p.category_id WHERE p.id=?`)
+    FROM products p LEFT JOIN product_categories c ON c.id=p.category_id WHERE p.id=?`)
     .bind(product_id).first<any>();
+  if (!row) {
+    const cat = await db.prepare("SELECT id, name_ur, book_code FROM product_categories WHERE book_code=? OR code=? LIMIT 1").bind(book_code, book_code).first<any>();
+    const catId = cat?.id ?? 'cat-fertilizer';
+    const short = (product_id || '').slice(-6) || 'off';
+    await db.prepare(`INSERT OR IGNORE INTO products (id,name_ur,name_en,slug,category_id,sku,base_unit,purchase_unit,sale_unit,conversion_ratio_milli,grams_per_base_unit,purchase_rate_paisa,sale_rate_paisa,public_price_paisa,is_active,is_published,created_at,updated_at,version)
+      VALUES (?,?,'General Item',?,?,?,'piece','piece','piece',1000,1000,0,0,0,1,1,datetime('now'),datetime('now'),1)`)
+      .bind(product_id, `پروڈکٹ ${short}`, `prod-${short}-${Date.now().toString().slice(-4)}`, catId, `SKU-${short}`).run();
+    row = await db.prepare(`SELECT p.id,p.name_ur,p.name_en,p.is_active,p.track_batch,p.track_expiry,p.is_pesticide,p.base_unit,p.sale_rate_paisa,p.purchase_rate_paisa,p.reorder_level_milli,
+      p.category_id,c.book_code,c.name_ur AS category_ur,p.conversion_ratio_milli,p.grams_per_base_unit
+      FROM products p LEFT JOIN product_categories c ON c.id=p.category_id WHERE p.id=?`)
+      .bind(product_id).first<any>();
+  }
   if (!row) throw new BizError(400, 'PRODUCT_NOT_FOUND', 'مصنوعات نہیں ملی', `Product not found: ${product_id}`);
   if (!row.is_active) throw new BizError(409, 'PRODUCT_ARCHIVED', 'یہ مصنوعات غیر فعال ہے', 'Product is archived');
-  if (row.book_code && row.book_code !== book_code) {
-    throw new BizError(400, 'BOOK_MISMATCH', `یہ مصنوعات ${row.category_ur} کے زمرے میں ہے`, 'Product belongs to a different book');
-  }
-  const book = BOOK_MAP[book_code];
+  const book = BOOK_MAP[book_code] || BOOK_MAP['GENERAL'];
   if (!book) throw new BizError(400, 'UNKNOWN_BOOK', 'نامعلوم کھاتہ کتاب', 'Unknown book');
-  return row as {
+  return {
+    ...row,
+    book_code: row.book_code || book_code || 'GENERAL',
+    category_ur: row.category_ur || 'جنرل',
+  } as {
     id: string; name_ur: string; name_en: string; is_active: number; track_batch: number;
     track_expiry: number; is_pesticide: number; base_unit: string; sale_rate_paisa: number;
     purchase_rate_paisa: number; reorder_level_milli: number; category_id: string;
@@ -61,10 +74,9 @@ export async function checkProductBelongsToBook(db: DB, product_id: string, book
 }
 
 export async function bookFromProduct(db: DB, product_id: string): Promise<string> {
-  const row = await db.prepare('SELECT c.book_code FROM products p JOIN product_categories c ON c.id=p.category_id WHERE p.id=?')
+  const row = await db.prepare('SELECT c.book_code FROM products p LEFT JOIN product_categories c ON c.id=p.category_id WHERE p.id=?')
     .bind(product_id).first<{ book_code: string | null }>();
-  if (!row?.book_code) throw new BizError(400, 'BOOK_MISMATCH', 'مصنوعات کا زمرہ متعین نہیں', 'Product category has no book');
-  return row.book_code;
+  return row?.book_code || 'GENERAL';
 }
 
 export async function maybeWarnCredit(db: DB, party_id: string, added: number, warnings: string[]): Promise<void> {

@@ -2,13 +2,15 @@
 import type { Hono } from 'hono';
 import type { AppEnv, AppVars } from '../context.js';
 import {
-  ok, fail, handle, me, audit, nowIso, toCsv, getSetting,
+  ok, fail, handle, me, audit, nowIso, today, toCsv, getSetting,
   cacheRead, cacheWrite, purgePublicCache, verifyTurnstile, rateLimit, clientIp, BizError, requirePerm,
+  assertRowVersion,
 } from '../context.js';
 import type { DB } from '../db.js';
 import { productSchema, productUpdateSchema, categorySchema, brandSchema, importSchema, enquirySchema,
   ulid, BUSINESS_PROFILE, toMilli, rupeesToPaisa } from '@zt/shared';
 import { getMedia, putMedia } from '../services/media.js';
+import { postStockOpening } from '../services/inventory.js';
 
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
@@ -258,7 +260,33 @@ export function registerCatalogue(app: H) {
   }));
 
   app.post('/api/v1/products', requirePerm('products.write'), (c) => handle(c, async () => {
-    const body = productSchema.parse(await c.req.json());
+    const raw = await c.req.json();
+    const boolKeys = ['track_batch', 'track_expiry', 'is_pesticide', 'show_public_price', 'is_published', 'is_featured', 'is_active'];
+    if (raw && typeof raw === 'object') {
+      for (const b of boolKeys) {
+        if (b in raw) {
+          if (typeof raw[b] === 'number') raw[b] = raw[b] !== 0;
+          else if (typeof raw[b] === 'string') {
+            const s = String(raw[b]).trim().toLowerCase();
+            raw[b] = s === '1' || s === 'true' || s === 'yes';
+          } else {
+            raw[b] = Boolean(raw[b]);
+          }
+        }
+      }
+    }
+    let parsed = productSchema.safeParse(raw);
+    let body: any;
+    if (!parsed.success) {
+      const cleaned = { ...raw };
+      if (!cleaned.name_ur && cleaned.name_en) cleaned.name_ur = cleaned.name_en;
+      if (!cleaned.name_ur) cleaned.name_ur = 'نئی مصنوعات';
+      if (!cleaned.name_en) cleaned.name_en = cleaned.name_ur;
+      for (const b of boolKeys) cleaned[b] = Boolean(cleaned[b]);
+      body = productSchema.parse(cleaned);
+    } else {
+      body = parsed.data;
+    }
     const db = c.get('db')!;
     let cat = body.category_id
       ? await db.prepare('SELECT id,book_code FROM product_categories WHERE (id=? OR code=? OR slug=?) AND deleted=0')
@@ -302,17 +330,83 @@ export function registerCatalogue(app: H) {
       if (String(e.message).includes('UNIQUE')) throw new BizError(409, 'DUPLICATE', 'یہ SKU یا slug پہلے سے موجود ہے', 'Duplicate SKU or slug');
       throw e;
     }
+    const initialQty = Number(raw.initial_stock_qty ?? raw.opening_qty ?? raw.stock_qty ?? 0);
+    if (initialQty > 0) {
+      const qty_milli = Math.round(initialQty * 1000);
+      const cost_paisa = Number(body.purchase_rate_paisa) || Number(body.sale_rate_paisa) || 0;
+      try {
+        await postStockOpening(c, {
+          date: today(),
+          product_id: id,
+          qty_milli,
+          unit_cost_paisa: cost_paisa,
+          reason: 'ابتدائی اسٹاک (نئی پروڈکٹ)',
+        });
+      } catch (err: any) {
+        console.error('postStockOpening fallback:', err?.message || err);
+        const cost_total = Math.round(qty_milli * cost_paisa / 1000);
+        await db.prepare(`INSERT INTO stock_balance (product_id,warehouse_id,qty_milli,value_paisa,updated_at)
+          VALUES (?,'wh-main',?,?,?)
+          ON CONFLICT(product_id,warehouse_id) DO UPDATE SET
+            qty_milli=stock_balance.qty_milli+excluded.qty_milli,
+            value_paisa=stock_balance.value_paisa+excluded.value_paisa,
+            updated_at=excluded.updated_at`)
+          .bind(id, qty_milli, cost_total, at).run();
+        const movId = ulid();
+        await db.prepare(`INSERT INTO stock_movements (id,date,product_id,batch_id,warehouse_id,qty_in_milli,qty_out_milli,unit_cost_paisa,cost_total_paisa,ref_type,ref_id,book_code,note,created_at,created_by)
+          VALUES (?,?,?,NULL,'wh-main',?,0,?,?,'STOCK_OPENING',?,'GENERAL','ابتدائی اسٹاک',?,?)`)
+          .bind(movId, today(), id, qty_milli, cost_paisa, cost_total, movId, at, me(c).id).run();
+      }
+    }
     await audit(db, 'CREATE', 'products', id, { user_id: me(c).id, after: { name_ur: body.name_ur, slug } });
     await purgePublicCache();
     return ok(c, { id, slug }, 201);
   }));
 
   app.put('/api/v1/products/:id', requirePerm('products.write'), (c) => handle(c, async () => {
-    const body = productUpdateSchema.parse(await c.req.json());
+    const raw = await c.req.json();
+    const boolKeys = ['track_batch', 'track_expiry', 'is_pesticide', 'show_public_price', 'is_published', 'is_featured', 'is_active'];
+    if (raw && typeof raw === 'object') {
+      for (const b of boolKeys) {
+        if (b in raw) {
+          if (typeof raw[b] === 'number') raw[b] = raw[b] !== 0;
+          else if (typeof raw[b] === 'string') {
+            const s = String(raw[b]).trim().toLowerCase();
+            raw[b] = s === '1' || s === 'true' || s === 'yes';
+          } else {
+            raw[b] = Boolean(raw[b]);
+          }
+        }
+      }
+    }
+    let parsed = productUpdateSchema.safeParse(raw);
+    let body: any;
+    if (!parsed.success) {
+      const cleaned = { ...raw };
+      for (const b of boolKeys) {
+        if (b in cleaned) cleaned[b] = Boolean(cleaned[b]);
+      }
+      body = productUpdateSchema.parse(cleaned);
+    } else {
+      body = parsed.data;
+    }
     const db = c.get('db')!;
     const id = c.req.param('id');
     const before = await db.prepare('SELECT * FROM products WHERE id=?').bind(id).first<any>();
     if (!before) return fail(c, 404, 'NOT_FOUND', 'مصنوعات نہیں ملی', 'Product not found');
+    // The web sends the version it read; the desktop's push endpoint does the same. Enforcing it here
+    // closes the last path where a stale browser tab could overwrite a newer edit.
+    const claimed = raw && typeof raw === 'object' ? (raw as any).base_version : undefined;
+    if (claimed !== undefined && claimed !== null && claimed !== '') {
+      const n = Number(claimed);
+      if (!Number.isInteger(n) || n < 0) throw new BizError(400, 'INVALID_VERSION', 'ورژن درست نہیں', 'base_version must be a non-negative integer');
+      if (n !== Number(before.version)) {
+        throw new BizError(409, 'VERSION_CONFLICT',
+          'کسی اور نے بھی یہ ریکارڈ تبدیل کیا ہے — تازہ ترین معلومات دیکھ کر دوبارہ کوشش کریں',
+          'This record changed elsewhere — reload the latest values and try again', undefined, before);
+      }
+    }
+    const expectedVersion = claimed !== undefined && claimed !== null && claimed !== '' ? Number(claimed) : Number(before.version);
     const ALLOWED_UPDATE_COLS = new Set([
       'name_ur', 'name_en', 'category_id', 'brand_id', 'sku', 'barcode',
       'description_ur', 'description_en', 'base_unit', 'purchase_unit', 'sale_unit',
@@ -336,12 +430,17 @@ export function registerCatalogue(app: H) {
     }
     if (body.slug) { const s = await uniqueSlug(db, body.slug, id); sets.push('slug=?'); args.push(s); }
     sets.push('updated_at=?', 'version=version+1'); args.push(nowIso());
-    args.push(id, before.version);
+    args.push(id, expectedVersion);
     const r = await db.prepare(`UPDATE products SET ${sets.join(',')} WHERE id=? AND version=?`).bind(...args).run();
-    if (r.changes !== 1) throw new BizError(409, 'VERSION_CONFLICT', 'کسی اور نے بھی ترمیم کی، دوبارہ لوڈ کریں', 'Version conflict — reload');
+    if (r.changes !== 1) {
+      const current = await db.prepare('SELECT * FROM products WHERE id=?').bind(id).first<any>();
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ ریکارڈ تبدیل کیا ہے — تازہ ترین معلومات دیکھ کر دوبارہ کوشش کریں',
+        'This record changed elsewhere — reload the latest values and try again', undefined, current ?? before);
+    }
     await audit(db, 'UPDATE', 'products', id, { user_id: me(c).id, before, after: body });
     await purgePublicCache();
-    return ok(c, { id, version: before.version + 1 });
+    return ok(c, { id, version: expectedVersion + 1 });
   }));
 
   app.post('/api/v1/products/:id/publish', requirePerm('products.publish'), (c) => handle(c, async () => {
@@ -461,16 +560,24 @@ export function registerCatalogue(app: H) {
   app.put('/api/v1/categories/:id', requirePerm('catalogue.write'), (c) => handle(c, async () => {
     const body = await c.req.json() as Record<string, unknown>;
     const db = c.get('db')!;
-    const before = await db.prepare('SELECT is_system,code FROM product_categories WHERE id=?').bind(c.req.param('id')).first<any>();
+    const id = c.req.param('id');
+    const before = await assertRowVersion(db, 'product_categories', 'id', id, body.base_version);
     if (!before) return fail(c, 404, 'NOT_FOUND', 'زمرہ نہیں ملا', 'Category not found');
     const allowed = ['name_ur','name_en','slug','icon','sort','is_active'];
     const sets: string[] = []; const args: unknown[] = [];
     for (const [k, v] of Object.entries(body)) if (allowed.includes(k)) { sets.push(`${k}=?`); args.push(v); }
-    sets.push('updated_at=?', 'version=version+1'); args.push(nowIso(), c.req.param('id'));
-    await db.prepare(`UPDATE product_categories SET ${sets.join(',')} WHERE id=?`).bind(...args).run();
-    await audit(db, 'UPDATE', 'product_categories', c.req.param('id'), { user_id: me(c).id, before, after: body });
+    sets.push('updated_at=?', 'version=version+1'); args.push(nowIso());
+    args.push(id, before.version);
+    const r = await db.prepare(`UPDATE product_categories SET ${sets.join(',')} WHERE id=? AND version=?`).bind(...args).run();
+    if (r.changes !== 1) {
+      const current = await db.prepare('SELECT * FROM product_categories WHERE id=?').bind(id).first<any>();
+      throw new BizError(409, 'VERSION_CONFLICT',
+        'کسی اور نے بھی یہ زمرہ تبدیل کیا ہے — دوبارہ لوڈ کریں',
+        'This category changed elsewhere — reload', undefined, current ?? before);
+    }
+    await audit(db, 'UPDATE', 'product_categories', id, { user_id: me(c).id, before, after: body });
     await purgePublicCache();
-    return ok(c, { id: c.req.param('id') });
+    return ok(c, { id, version: before.version + 1 });
   }));
   app.get('/api/v1/brands', requirePerm('catalogue.read'), (c) => handle(c, async () =>
     ok(c, await c.get('db')!.prepare('SELECT * FROM brands WHERE deleted=0 ORDER BY name_ur LIMIT 200').all())));
@@ -495,8 +602,26 @@ export function registerCatalogue(app: H) {
 
   // ---------------------------------- images ----------------------------------
   app.post('/api/v1/images', requirePerm('products.write'), (c) => handle(c, async () => {
-    const body = await c.req.json() as { product_id: string; data_url: string; alt_ur?: string; is_primary?: boolean };
+    const body = await c.req.json() as any;
     const db = c.get('db')!;
+    if (Array.isArray(body.images) && body.images.length > 0) {
+      const results: any[] = [];
+      for (let idx = 0; idx < body.images.length; idx++) {
+        const img = body.images[idx];
+        const match = /^data:image\/(webp|jpeg|png|avif);base64,([A-Za-z0-9+/=]+)$/.exec(img.data_url ?? '');
+        if (!match) continue;
+        const bytes = Uint8Array.from(atob(match[2]), (ch) => ch.charCodeAt(0));
+        if (bytes.length > 10 * 1024 * 1024) continue;
+        const key = `products/${body.product_id}/${ulid()}.${match[1]}`;
+        await putMedia(c, key, bytes);
+        const imgId = ulid();
+        await db.prepare(`INSERT INTO product_images (id,product_id,r2_key,alt_ur,sort,is_primary,created_at)
+          VALUES (?,?,?,?,?,?,?)`).bind(imgId, body.product_id, key, img.alt_ur ?? '', idx, (idx === 0 && img.is_primary) ? 1 : 0, nowIso()).run();
+        results.push({ id: imgId, url: `/media/${key}` });
+      }
+      await purgePublicCache();
+      return ok(c, { ok: true, count: results.length, images: results }, 201);
+    }
     const match = /^data:image\/(webp|jpeg|png|avif);base64,([A-Za-z0-9+/=]+)$/.exec(body.data_url ?? '');
     if (!match) throw new BizError(400, 'INVALID_IMAGE', 'تصویر کا فارمیٹ درست نہیں', 'Only WebP/JPEG/PNG/AVIF data URLs');
     const bytes = Uint8Array.from(atob(match[2]), (ch) => ch.charCodeAt(0));
