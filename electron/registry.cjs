@@ -1,7 +1,7 @@
 /**
  * Offline-sync registry — GENERATED, DO NOT EDIT BY HAND.
  *
- *   source    packages/shared/src/sync.ts   (sha256 19c354cccb8aad3f)
+ *   source    packages/shared/src/sync.ts   (sha256 d6363958da3ea5e3)
  *   generator electron/gen-registry.cjs     (re-run it after editing the TS registry)
  *   gate      electron/verify-registry.cjs  (exits non-zero if this mirror drifts)
  *
@@ -14,7 +14,7 @@
 
 const SOURCE = {
   "file": "packages/shared/src/sync.ts",
-  "sha256": "19c354cccb8aad3f",
+  "sha256": "d6363958da3ea5e3",
   "generated_by": "electron/gen-registry.cjs"
 };
 
@@ -744,7 +744,7 @@ const REPLICA_ENTITIES = [
     "entity": "website_pages",
     "table": "website_pages",
     "tier": "replica",
-    "pk": "id",
+    "pk": "slug",
     "cursor": "updated_at",
     "readPerm": "cms.read"
   },

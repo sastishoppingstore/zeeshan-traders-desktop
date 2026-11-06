@@ -315,6 +315,44 @@ describe('row-tier push and pull', () => {
   });
 });
 
+// -------------------------------------------------- server-derived columns ----
+describe('server-derived columns on an offline create', () => {
+  it('derives a unique slug for a product created through the row push', async () => {
+    const mk = (id: string) => ({
+      op_id: uuid(), entity: 'products', id, base_version: 0,
+      data: { name_ur: 'یوریا کھاد', category_id: 'cat-fert', base_unit: 'bag', purchase_unit: 'bag', sale_unit: 'bag' },
+    });
+    const a = ulidish(), b = ulidish();
+    const first = await push([mk(a)]);
+    expect(first.json.data.failed).toEqual([]);
+    expect(first.json.data.accepted).toHaveLength(1);
+    const second = await push([mk(b)]);
+    expect(second.json.data.failed).toEqual([]);
+    expect(second.json.data.accepted).toHaveLength(1);
+
+    const rows = h.sqlite.prepare('SELECT id, slug FROM products WHERE id IN (?,?)').all(a, b) as any[];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.slug).toBeTruthy();
+      expect(row.slug).not.toContain('ZTLOCAL');
+    }
+    // The second identical name must not collide: uniqueness is the server's to guarantee.
+    expect(rows[0].slug).not.toBe(rows[1].slug);
+  });
+
+  it('derives a slug for a category created through the row push', async () => {
+    const id = ulidish();
+    const r = await push([{
+      op_id: uuid(), entity: 'categories', id, base_version: 0,
+      data: { code: `T${id.slice(-6)}`, name_ur: 'نیا زمرہ', name_en: 'New Category', sort: 9, is_active: 1 },
+    }]);
+    expect(r.json.data.failed).toEqual([]);
+    expect(r.json.data.accepted).toHaveLength(1);
+    const row = h.sqlite.prepare('SELECT slug FROM product_categories WHERE id=?').get(id) as any;
+    expect(row.slug).toBeTruthy();
+  });
+});
+
 // ------------------------------------------------------ command / replica gates ----
 describe('what a client may never write', () => {
   it('refuses every replica and command entity as a raw row push', async () => {

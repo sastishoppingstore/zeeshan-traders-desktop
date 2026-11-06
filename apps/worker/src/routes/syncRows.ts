@@ -27,6 +27,7 @@ import {
   REPLICA_ENTITIES, ROW_ENTITIES, entityOf, rowEntity, sanitizeRowData,
   type PushRowOp, type PushRowResult, type ReplicaEntity, type RowEntity,
 } from '@zt/shared';
+import { uniqueSlugForTable } from '../services/common.js';
 
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
@@ -197,8 +198,17 @@ async function pushRows(db: DB, user: SessionUser, ops: PushRowOp[], deviceId: s
           message: `Required column(s) for a new ${def.entity}: ${missing.join(', ')}` });
         continue;
       }
-      const cols = [pk, ...Object.keys(data).map(sqlId), 'version', 'updated_at'];
-      const vals: unknown[] = [op.id, ...Object.values(data), 1, at];
+      // A slug is server-owned: it is never in `def.columns`, so the client cannot send one. Entities
+      // that need it (products, categories) declare `derive_slug`, and the create must generate it the
+      // same way the online POST handler does — otherwise every product added at the counter offline
+      // would fail with "NOT NULL constraint failed: products.slug".
+      const extra: Record<string, string> = {};
+      if (def.derive_slug) {
+        const source = String(data.name_ur ?? data.name_en ?? data.code ?? def.entity);
+        extra.slug = await uniqueSlugForTable(db, sqlId(def.table), source, op.id);
+      }
+      const cols = [pk, ...Object.keys(data).map(sqlId), ...Object.keys(extra).map(sqlId), 'version', 'updated_at'];
+      const vals: unknown[] = [op.id, ...Object.values(data), ...Object.values(extra), 1, at];
       if (def.has_created_at) { cols.push('created_at'); vals.push(at); }
       if (def.has_created_by) { cols.push('created_by'); vals.push(user.id); }
       // ON CONFLICT DO NOTHING: a concurrent insert of the same id loses cleanly (changes === 0)

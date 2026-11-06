@@ -101,6 +101,24 @@ describe('desktop local queue (offline create / edit / delete)', () => {
     expect(conflict.server.name_en).toBe('Their edit');
   });
 
+  it('queues a financial document as an intent with a valid created_at and a zero base_version', () => {
+    const store = open();
+    const out = store.command('EXPENSE', {
+      date: '2026-11-04', category_code: 'RENT', amount_paisa: 50000, account_id: 'CASH',
+    });
+    expect(out.ok).toBe(true);
+    const [op] = store.outbox.pending('command', 10);
+    expect(op.kind).toBe('command');
+    // Regression: the insert bound a timestamp to base_version and left created_at (NOT NULL) unset,
+    // so every offline expense threw before it could be queued.
+    expect(Number(op.created_at)).toBeGreaterThan(0);
+    expect(Number(op.base_version)).toBe(0);
+    const body = JSON.parse(op.payload_json);
+    expect(body.type).toBe('EXPENSE');
+    expect(body.payload.category_code).toBe('RENT');
+    expect(store.pendingCount()).toBe(1);
+  });
+
   it('keep_server abandons the local edit but retires the queued push and takes the server version', () => {
     const store = open();
     store.save('brands', { id: 'br-shared-1', name_ur: 'مقامی', name_en: 'My edit' });
