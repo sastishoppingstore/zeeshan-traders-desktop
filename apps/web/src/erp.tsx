@@ -20,6 +20,9 @@ import {
   OrdersScreen, PaymentMethodsScreen, UniversalCreateScreen,
 } from './erpScreens.js';
 import { DocumentForm, GrainForm, SimpleForm } from './erpForms.js';
+import { SyncChip } from './ui/sync-chip.js';
+import { DesktopSyncScreen } from './desktop-sync.js';
+import { DESKTOP_SYNC_PATH, isDesktop } from './desktop.js';
 
 type NavItem = { to: string; ur: string; en: string; icon: string; perm?: string };
 const NAV_GROUPS: { group: string; group_en: string; items: NavItem[] }[] = [
@@ -54,6 +57,8 @@ const NAV_GROUPS: { group: string; group_en: string; items: NavItem[] }[] = [
     { to: '/erp/reports', ur: 'رپورٹس', en: 'Reports', icon: 'reports', perm: 'reports.view' },
     { to: '/erp/accounting', ur: 'اکاؤنٹنگ', en: 'Accounting', icon: 'accounting', perm: 'accounting.read' },
     { to: '/erp/users', ur: 'صارفین', en: 'Users', icon: 'users', perm: 'users.read' },
+    // The bridge queue only exists in the desktop shell, so the web nav never grows this entry.
+    ...(isDesktop ? [{ to: DESKTOP_SYNC_PATH, ur: 'ڈیسک ٹاپ سنک', en: 'Desktop Sync', icon: 'sync', perm: 'sync.read' }] : []),
     { to: '/erp/sync', ur: 'سنک', en: 'Sync', icon: 'sync', perm: 'sync.read' },
     { to: '/erp/backup', ur: 'بیک اپ', en: 'Backup', icon: 'backup', perm: 'backup.read' },
     { to: '/erp/settings', ur: 'ترتیبات', en: 'Settings', icon: 'settings', perm: 'settings.read' },
@@ -135,8 +140,11 @@ function TopBar({ title, onOpenMenu }: { title: string; onOpenMenu: () => void }
       </Link>
       <div className="title">{title}</div>
       <button className="btn btn-ghost btn-sm no-print" onClick={() => setSearch(true)} aria-label={lang === 'ur' ? 'تلاش' : 'Search'}><Mark kind="search" /></button>
-      <button className={`chip ${online ? (conflicts ? 'danger' : 'success') : 'warning'}`} onClick={() => nav('/erp/sync')}
-        title="Sync Centre" style={{ cursor: 'pointer', border: 'none' }}>{state}</button>
+      {isDesktop
+        // Desktop reads the main process's queue, so the same glance also shows the last sync clock.
+        ? <SyncChip />
+        : <button className={`chip ${online ? (conflicts ? 'danger' : 'success') : 'warning'}`} onClick={() => nav('/erp/sync')}
+          title="Sync Centre" style={{ cursor: 'pointer', border: 'none' }}>{state}</button>}
       <button className="btn btn-ghost btn-sm no-print" onClick={() => void syncNow()} aria-label={lang === 'ur' ? 'ابھی سنک کریں' : 'Sync Now'}><Mark kind="sync" /></button>
       {pin.enabled && pin.unlocked && <button className="btn btn-ghost btn-sm no-print" onClick={() => { lockPin(); }} title={lang === 'ur' ? 'آف لائن کیش مقفل کریں' : 'Lock Offline Cache'} aria-label={lang === 'ur' ? 'کیش مقفل کریں' : 'Lock Cache'}><Mark kind="lock" /></button>}
       <button className="btn btn-ghost btn-sm no-print" onClick={() => setLang(lang === 'ur' ? 'en' : 'ur')}>{lang === 'ur' ? 'EN' : 'UR'}</button>
@@ -516,6 +524,9 @@ export function ErpApp() {
     <Route path="accounting" element={<AccountingScreen />} />
     <Route path="users" element={<UsersScreen />} />
     <Route path="sync" element={<SyncCentre />} />
+    {/* Registered only in the desktop shell: this screen is a bridge viewer, and on web the
+        server-backed Sync Centre above already owns /erp/sync. */}
+    {isDesktop && <Route path="desktop-sync" element={<DesktopSyncScreen />} />}
     <Route path="backup" element={<BackupScreen />} />
     <Route path="settings" element={<SettingsScreen />} />
     <Route path="audit" element={<AuditScreen />} />

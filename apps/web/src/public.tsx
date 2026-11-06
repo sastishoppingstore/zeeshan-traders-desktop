@@ -111,7 +111,7 @@ function Header({ business }: { business: any }) {
 }
 
 function MobileNav({ business }: { business: any }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const loc = useLocation();
   const { count } = useCart();
   const b = business ?? BUSINESS_PROFILE;
@@ -119,7 +119,7 @@ function MobileNav({ business }: { business: any }) {
     ['/', 'home', t('home')],
     ['/products', 'products', t('products')],
     ['/categories', 'categories', t('categories')],
-    ['/checkout', 'enquiry', t('checkout')],
+    ['/checkout', 'enquiry', lang === 'ur' ? 'آرڈر کریں' : 'Order'],
     ['/contact', 'contact', t('contact')],
   ];
   const isActive = (to: string) => (to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to));
@@ -162,7 +162,7 @@ function Footer({ business }: { business: any }) {
         <h2 style={{ fontSize: 18 }}>{t('quickLinks')}</h2>
         <div className="link-list">
           <Link to="/products">{t('products')}</Link><Link to="/categories">{t('categories')}</Link>
-          <Link to="/enquiry">{t('enquiry')}</Link><Link to="/privacy">{t('privacy')}</Link>
+          <Link to="/checkout">{t('checkout')}</Link><Link to="/enquiry">{t('enquiry')}</Link><Link to="/privacy">{t('privacy')}</Link>
           <Link to="/terms">{t('terms')}</Link><Link to="/erp">{t('erpArea')}</Link>
         </div>
       </div>
@@ -179,18 +179,18 @@ function Footer({ business }: { business: any }) {
 }
 
 function FloatingActions({ business }: { business: any }) {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const { count } = useCart();
   const loc = useLocation();
-  if (loc.pathname === '/enquiry') return null;
+  if (loc.pathname === '/checkout') return null;
   return <>
     <a className="float-wa" href={business?.whatsapp1 ?? BUSINESS_PROFILE.whatsapp1} target="_blank" rel="noreferrer" aria-label={t('whatsapp')}>
       <ChatMark />
     </a>
-    {count > 0 && <Link to="/enquiry" className="float-cart" aria-label={t('viewCart')}>
-      <span className="num">{count}</span>
-      <span className="float-cart-label">{t('cart')}</span>
-    </Link>}
+    <Link to="/checkout" className="float-cart" aria-label={lang === 'ur' ? 'آرڈر کریں' : 'Order Now'}>
+      <span className="float-cart-label">{lang === 'ur' ? 'آرڈر کریں' : 'Order'}</span>
+      {count > 0 && <span className="num">({count})</span>}
+    </Link>
   </>;
 }
 

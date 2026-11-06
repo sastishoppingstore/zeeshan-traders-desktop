@@ -1,10 +1,11 @@
 /** Global state: i18n, theme, session, offline status, Dexie outbox and sync triggers (spec 8.1). */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { tr, dirFor, type Lang, formatPKR } from '@zt/shared';
 import { api } from './api.js';
 import { ztdb, deviceId, type OutboxOp, type RefRow } from './cache-db.js';
 import { cacheRef, markLocked } from './offline-security.js';
+import { bridge, isDesktop, karachiClock, syncStore, useSyncStatus, type SyncStatus } from './desktop.js';
 export { ztdb, deviceId } from './cache-db.js';
 export type { OutboxOp, RefRow } from './cache-db.js';
 
@@ -25,6 +26,9 @@ interface AppState {
   online: boolean; session: Session | null; loadingSession: boolean; reloadSession: () => Promise<void>;
   setupStatus: any; reloadSetup: () => Promise<void>;
   pending: number; conflicts: number; syncing: boolean; lastSync: string | null;
+  /** The raw Electron queue snapshot — null in a browser, so desktop-only screens can read the
+   *  reachability, device id and configuration error the counters alone cannot show. */
+  desktopStatus: SyncStatus | null;
   syncNow: () => Promise<{ sent: number; conflicts: number }>;
   enqueue: (type: OutboxOp['type'], payload: Record<string, unknown>) => Promise<OutboxOp>;
   toast: (msg: string, kind?: 'ok' | 'err') => void; toastMsg: { msg: string; kind: string } | null;
@@ -61,6 +65,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ msg: string; kind: string } | null>(null);
   const timer = useRef<number | null>(null);
+  const navigate = useNavigate();
+  const desktopStatus = useSyncStatus();
 
   const t = useCallback((k: string) => tr(k, lang), [lang]);
   const dir = dirFor(lang);
@@ -110,6 +116,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [lang, dir, pathname, pageName, brand, bi, t]);
 
   const reloadSession = useCallback(async () => {
+    if (isDesktop && bridge) {
+      // file:// carries no cookies and no ERP path, so the main process — which holds the Bearer
+      // token — is the only thing that can say whether this machine is signed in.
+      const s = await bridge.session();
+      if (!s.authenticated) { setSession(null); setLoadingSession(false); return; }
+      // Still asked through api(): online the bridge forwards it, offline it answers from the cache.
+      try { const me = await api<Session>('/api/v1/auth/me'); setSession(me); }
+      catch {
+        // Offline restart. `/auth/me` is a remote-tier route, so with no network it answers 503 —
+        // but the token is still in the vault and the last successful response was cached there.
+        // Restoring that session is what makes "later launches work fully offline" true; treating
+        // the 503 as a signed-out shop would show the login screen and strand the local mirror.
+        const cached = s.user as (Session | null);
+        setSession(cached?.user ? { user: cached.user, setup_complete: cached.setup_complete ?? true } : null);
+      }
+      finally { setLoadingSession(false); }
+      return;
+    }
     const hasSessionCookie = typeof document !== 'undefined' && /(?:^|;\s*)zt_csrf=/.test(document.cookie);
     const isErpRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/erp');
     if (!hasSessionCookie && !isErpRoute) {
@@ -126,11 +150,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshCounts = useCallback(async () => {
+    if (isDesktop && bridge) {
+      // The main process owns the SQLite outbox; the renderer only mirrors its counters.
+      const s = await bridge.status();
+      syncStore.publish(s);
+      setPending(s.pending);
+      setConflicts(s.conflicts);
+      setLastSync(karachiClock(s.last_synced_at));
+      return;
+    }
     setPending(await ztdb.outbox.where('status').anyOf('PENDING', 'FAILED').count());
     setConflicts(await ztdb.outbox.where('status').equals('CONFLICT').count());
   }, []);
 
   const syncNow = useCallback(async () => {
+    if (isDesktop && bridge) {
+      if (syncing) return { sent: 0, conflicts: 0 };
+      setSyncing(true);
+      try {
+        const queuedBefore = syncStore.get()?.pending ?? 0;
+        const s = await bridge.syncNow();
+        syncStore.publish(s);
+        return { sent: Math.max(0, queuedBefore - s.pending), conflicts: s.conflicts };
+      } finally {
+        setSyncing(false);
+        await refreshCounts();
+        window.dispatchEvent(new Event('zt-synced'));
+      }
+    }
     if (!navigator.onLine || syncing) return { sent: 0, conflicts: 0 };
     setSyncing(true);
     let sent = 0, conf = 0;
@@ -156,21 +203,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const enqueue = useCallback(async (type: OutboxOp['type'], payload: Record<string, unknown>) => {
     const id = crypto.randomUUID();
-    const op: OutboxOp = { id, device_id: deviceId(), type, payload, local_time: new Date().toISOString(),
+    const local_time = new Date().toISOString();
+    // Desktop identity comes from the main process, which owns the device id for the queue.
+    const device_id = isDesktop ? (syncStore.get()?.device_id || deviceId()) : deviceId();
+    const op: OutboxOp = { id, device_id, type, payload, local_time,
       status: 'PENDING', tries: 0, created_at: Date.now() };
+    if (isDesktop && bridge) {
+      // Dexie is deliberately skipped: the main process owns the SQLite outbox and drains it, so a
+      // second copy in IndexedDB would be pushed twice. api() carries this write into that queue.
+      await api('/api/v1/sync/push', { method: 'POST',
+        body: { idempotency_key: op.id, device_id: op.device_id, type, payload, local_time } });
+      await refreshCounts();
+      toast(lang === 'ur'
+        ? 'اندراج اس کمپیوٹر پر محفوظ ہو گیا — آن لائن ہوتے ہی سنک ہوگا'
+        : 'Saved on this computer — it syncs as soon as the connection is back');
+      return op;
+    }
     await ztdb.outbox.add(op);
     await refreshCounts();
     toast('آف لائن اندراج محفوظ ہو گیا — آن لائن ہوتے ہی سنک ہوگا');
     return op;
-  }, [refreshCounts, toast]);
+  }, [refreshCounts, toast, lang]);
 
   const logout = useCallback(async () => {
     try { await api('/api/v1/auth/logout', { method: 'POST', body: {} }); } catch { /* ignore */ }
+    if (isDesktop) {
+      // The api() call above went through the bridge, which drops the stored token. There is no
+      // /erp/login file to point location.href at — the hash router owns the route.
+      await ztdb.refs.clear(); await ztdb.drafts.clear();
+      markLocked();
+      setSession(null);
+      navigate('/erp/login', { replace: true });
+      return;
+    }
     await ztdb.refs.clear(); await ztdb.drafts.clear(); await ztdb.outbox.where('status').equals('SYNCED').delete();
     markLocked();
     setSession(null);
     window.location.href = '/erp/login';
-  }, []);
+  }, [navigate]);
 
   const can = useCallback((perm: string) => {
     const p = session?.user.permissions ?? [];
@@ -185,7 +255,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     reloadSession(); reloadSetup(); refreshCounts();
-    if ('serviceWorker' in navigator) {
+    // file:// has no scope to serve a worker from, and the desktop app caches in SQLite instead.
+    if (!isDesktop && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
   }, [reloadSession, reloadSetup, refreshCounts]);
@@ -207,8 +278,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [syncNow]);
 
+  // Desktop: the main process pushes the state of the queue it owns, so the header chip, the sync
+  // screen and every form read one set of numbers instead of a Dexie copy of them.
+  useEffect(() => {
+    if (!isDesktop || !desktopStatus) return;
+    setOnline(desktopStatus.online);
+    setPending(desktopStatus.pending);
+    setConflicts(desktopStatus.conflicts);
+    setSyncing(desktopStatus.syncing);
+    setLastSync(karachiClock(desktopStatus.last_synced_at));
+  }, [desktopStatus]);
+
   // Cache role-scoped reference data for offline list screens; wipe on logout.
   useEffect(() => {
+    // On desktop this would be a second offline cache beside the main process's SQLite one.
+    if (isDesktop) return;
     if (!session || !online) return;
     const paths: [string, string][] = [
       ['products', '/api/v1/products?limit=100'], ['parties', '/api/v1/parties?limit=100'],
@@ -226,10 +310,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppState>(() => ({
     lang, setLang, t, dir, bi, setPageName, setBrand, theme, setTheme, online, session, loadingSession, reloadSession,
-    setupStatus, reloadSetup, pending, conflicts, syncing, lastSync, syncNow, enqueue,
+    setupStatus, reloadSetup, pending, conflicts, syncing, lastSync, desktopStatus, syncNow, enqueue,
     toast, toastMsg, logout, can,
   }), [lang, dir, theme, bi, setBrand, online, session, loadingSession, setupStatus, pending, conflicts, syncing,
-    lastSync, syncNow, enqueue, toast, toastMsg, logout, can, t, reloadSession, reloadSetup]);
+    lastSync, desktopStatus, syncNow, enqueue, toast, toastMsg, logout, can, t, reloadSession, reloadSetup]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

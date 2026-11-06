@@ -14,6 +14,11 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: isDesktop ? './' : '/',
   plugins: [react()],
+  // The renderer must not be able to reach the storefront by accident, so the desktop export gets
+  // a compile-time constant: `if (__ZT_DESKTOP__)` lets Rollup delete the catalogue branch (and the
+  // chunk it dynamically pulls) rather than shipping it and hiding it. Unset => false => web output
+  // is the same code path it always was.
+  define: { __ZT_DESKTOP__: JSON.stringify(isDesktop) },
   resolve: {
     alias: { '@zt/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)) },
   },

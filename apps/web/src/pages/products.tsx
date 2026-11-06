@@ -69,10 +69,11 @@ export function ProductCard({ p, business }: { p: any; business: any }) {
 }
 
 export function CartButton() {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const { count } = useCart();
-  if (!count) return null;
-  return <Link to="/checkout" className="btn btn-gold btn-sm">{t('checkout')} <span className="num">{count}</span></Link>;
+  return <Link to="/checkout" className="btn btn-gold btn-sm" aria-label={lang === 'ur' ? 'آرڈر کریں' : 'Order Now'}>
+    {lang === 'ur' ? 'آرڈر کریں' : 'Order Now'} {count > 0 && <span className="num">({count})</span>}
+  </Link>;
 }
 
 function EmptyForProducts({ whatsapp }: { whatsapp?: string }) {
