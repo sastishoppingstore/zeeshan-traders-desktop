@@ -11,6 +11,7 @@ import { productSchema, productUpdateSchema, categorySchema, brandSchema, import
   ulid, BUSINESS_PROFILE, toMilli, rupeesToPaisa } from '@zt/shared';
 import { getMedia, putMedia } from '../services/media.js';
 import { postStockOpening } from '../services/inventory.js';
+import { uniqueSlugForTable } from '../services/common.js';
 
 type H = Hono<{ Bindings: AppEnv; Variables: AppVars }>;
 
@@ -53,19 +54,8 @@ const PUBLIC_SELECT = `SELECT p.*, c.name_ur AS category_ur, c.name_en AS catego
   FROM (SELECT * FROM products WHERE deleted=0) p JOIN product_categories c ON c.id=p.category_id AND c.deleted=0
   LEFT JOIN brands b ON b.id=p.brand_id AND b.deleted=0`;
 
-function slugify(name: string): string {
-  const base = name.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-  return (base || 'product').slice(0, 120);
-}
-
 async function uniqueSlug(db: DB, name: string, id?: string): Promise<string> {
-  let slug = slugify(name);
-  for (let i = 0; i < 20; i++) {
-    const row = await db.prepare('SELECT id FROM products WHERE slug=?').bind(slug).first<{ id: string }>();
-    if (!row || row.id === id) return slug;
-    slug = `${slugify(name)}-${i + 2}`;
-  }
-  return `${slugify(name)}-${ulid().slice(-6).toLowerCase()}`;
+  return uniqueSlugForTable(db, 'products', name || 'product', id);
 }
 
 export function registerCatalogue(app: H) {

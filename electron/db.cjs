@@ -533,7 +533,7 @@ function createStore({ db, file = ':memory:', log = () => {}, boot = {} }) {
       }
       db.prepare(`INSERT INTO outbox (op_id,entity,row_id,kind,payload_json,base_version,deleted,state,tries,created_at)
         VALUES (?,?,?,'command',?,?,0,'PENDING',0,?)`)
-        .run(opId, def.entity, ref, JSON.stringify({ type: def.opType, payload: body, local_time: localTime }), Date.now());
+        .run(opId, def.entity, ref, JSON.stringify({ type: def.opType, payload: body, local_time: localTime }), 0, Date.now());
       return { ok: true, queued_as: opId, entity: def.entity, op_type: def.opType, idempotency_key: opId, coalesced: false };
     })();
   }

@@ -111,4 +111,27 @@ export function moneyCode(ref: string): string {
   return MONEY_MAP[ref] ? ref : Object.keys(MONEY_MAP).find((k) => ref.endsWith(k.toLowerCase())) ?? 'CASH';
 }
 
+/** URL-safe slug from a display name. Only the server normalises this, because the public product
+ *  URL depends on the slug being normalised and unique — which a client cannot guarantee offline. */
+export function slugify(name: string): string {
+  const base = String(name ?? '').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
+  return (base || 'item').slice(0, 120);
+}
+
+/**
+ * A slug that is unique within `table`, suffixing -2, -3 … and finally a random tail, exactly as the
+ * catalogue handlers do. The online `POST /products` and the offline row-push both call this, so a
+ * product created at the counter gets the same kind of slug as one created in the browser.
+ * `table` is always a registry name (never client input) — callers pass it through `sqlId()`.
+ */
+export async function uniqueSlugForTable(db: DB, table: string, source: string, excludeId?: string): Promise<string> {
+  const base = slugify(source);
+  for (let i = 0; i < 20; i++) {
+    const slug = i === 0 ? base : `${base}-${i + 1}`;
+    const row = await db.prepare(`SELECT id FROM ${table} WHERE slug=?`).bind(slug).first<{ id: string }>();
+    if (!row || row.id === excludeId) return slug;
+  }
+  return `${base}-${Date.now().toString(36).slice(-6)}`;
+}
+
 export async function purgeIfCatalogue(): Promise<void> { await purgePublicCache(); }

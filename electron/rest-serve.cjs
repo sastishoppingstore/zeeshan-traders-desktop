@@ -307,7 +307,7 @@ function createRestServe({ store, log = () => {}, http }) {
     }
     if (route.reply === 'ok') return envelope({ ok: true }, 201);
     if (route.reply === 'key') return envelope({ key: id });
-    if (route.reply === 'product') return envelope({ id, slug: out.row?.slug ?? null, version: out.row?.version ?? 1 });
+    if (route.reply === 'product') return envelope({ id, slug: out.row?.slug ?? null, version: out.row?.version ?? 1 }, res.method === 'POST' ? 201 : 200);
     return envelope({ id, number: '', warnings: [], queued: true, op_id: out.queued_as }, res.method === 'POST' ? 201 : 200);
   }
 
