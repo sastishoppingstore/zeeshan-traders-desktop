@@ -174,7 +174,7 @@ jobs:
           body: |
             Windows x64 installer for Zeeshan Traders (ذیشان ٹریڈرز) desktop.
 
-            API origin baked in: `${{ vars.DESKTOP_API_URL }}`
+            API origin baked in: `${{ env.DESKTOP_API_URL }}`
 
             Unsigned build — Windows SmartScreen will warn on first run until a code
             signing certificate is configured (see package.json signing placeholder).
