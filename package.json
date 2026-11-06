@@ -14,6 +14,7 @@
     "build:web": "vite build --config apps/web/vite.config.ts",
     "build:desktop": "cross-env BUILD_TARGET=desktop vite build --config apps/web/vite.config.ts",
     "config:desktop": "node scripts/write-desktop-config.mjs",
+    "icon:desktop": "node scripts/build-desktop-icon.mjs",
     "dev:desktop": "npm run build:desktop && node scripts/write-desktop-config.mjs && cross-env NODE_ENV=development DESKTOP_API_URL=http://localhost:3000 electron .",
     "dist:win": "npm run build:desktop && node scripts/write-desktop-config.mjs --required && electron-builder --win nsis --x64",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
@@ -108,7 +109,7 @@
           ]
         }
       ],
-      "icon": "apps/web/public/icons/icon-512.png",
+      "icon": "build/icon.ico",
       "artifactName": "ZeeshanTraders-${version}-win-${arch}.${ext}",
       "requestedExecutionLevel": "asInvoker"
     },
