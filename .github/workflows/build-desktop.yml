@@ -88,6 +88,15 @@ jobs:
       - name: Install dependencies (lockfile-exact)
         run: npm ci
 
+      # Run the suite while better-sqlite3 is still built for Node. Once it is rebuilt for
+      # Electron's ABI it cannot load under plain Node, and the driver would fall back to
+      # node:sqlite — experimental on Node 22, hence the flag. Testing before the rebuild keeps
+      # the real native module in play.
+      - name: Test suite first — a broken build never ships
+        env:
+          NODE_OPTIONS: --experimental-sqlite
+        run: npm test
+
       - name: Resolve the installed Electron version (native-module cache key)
         id: electron
         shell: bash
@@ -108,9 +117,6 @@ jobs:
       - name: Rebuild native modules against Electron's ABI
         if: steps.native.outputs.cache-hit != 'true'
         run: npm run rebuild:native
-
-      - name: Test suite first — a broken build never ships
-        run: npm test
 
       - name: Build the desktop web bundle into out/
         run: npm run build:desktop
